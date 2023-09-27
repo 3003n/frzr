@@ -26,18 +26,75 @@ get_img_url() {
     echo $result | jq 'first | .url' | sed 's/"//g'
 }
 
+create_swap() {
+    local mount_path=${1}
+    local deployment_dir=${2}
+
+	local ram_info=$(sudo dmidecode -t 17 | grep Size)
+	local ram_size=$(echo "$ram_info" | awk '{sum += $2} END {print sum}')
+
+	local available_space=$(df -B 1G --output=avail "$mount_path" | tail -n 1)
+    local required_space=ram_size
+
+	# check swap subvolume
+	if [ ! -d "$mount_path/swap" ]; then
+    	echo "$mount_path/swap does not exist. creating subvolume..."
+
+    	# create subvolume
+    	btrfs subvolume create $mount_path/swap
+		chattr +C $mount_path/swap
+	else
+    	# check if subvolume exists
+    	if btrfs subvolume show "$mount_path/swap" &> /dev/null; then
+    		echo "$mount_path/swap is a Btrfs subvolume."
+    	else
+    		echo "$mount_path/swap exists but is not a Btrfs subvolume."
+    		rm -rf $mount_path/swap
+    		btrfs subvolume create $mount_path/swap
+    		chattr +C $mount_path/swap
+    	fi
+	fi
+
+	# create swapfile
+    if [ ! -f "$mount_path/swap/swapfile" ]; then
+        btrfs filesystem mkswapfile --size "$ram_size"GiB "$mount_path/swap/swapfile"
+    else
+        echo "Swapfile appears to already exist"
+		existing_file_type=$(file "$mount_path/swap/swapfile" | cut -d' ' -f2-)
+		if [[ "$existing_file_type" == *"Linux swap file"* ]]; then
+			echo "Swapfile is a Linux swap file"
+			if swapon --show | grep -q "$mount_path/swap/swapfile"; then
+				echo "Swapfile is already enabled"
+			else
+				echo "Enabling swapfile"
+				swapon "$mount_path/swap/swapfile"
+				if [ $? -ne 0 ]; then
+					echo "Failed to enable swapfile"
+					rm -rf $mount_path/swap/swapfile
+					btrfs filesystem mkswapfile --size "$ram_size"GiB "$mount_path/swap/swapfile"
+				fi
+			fi
+		else
+			echo "Swapfile exists but is not a Linux swap file"
+			rm -rf $mount_path/swap/swapfile
+			btrfs filesystem mkswapfile --size "$ram_size"GiB "$mount_path/swap/swapfile"
+		fi
+	fi
+}
+
 get_boot_cfg() {
 	local version=${1}
 	local amd_ucode=${2}
 	local intel_ucode=${3}
 	local additional_arguments=${4}
+	local swap_arguments=${5}
 	
 echo "title ${version}
 linux /${version}/vmlinuz-linux
 ${amd_ucode}
 ${intel_ucode}
 initrd /${version}/initramfs-linux.img
-options root=LABEL=frzr_root rw rootflags=subvol=deployments/${version} quiet splash loglevel=3 rd.systemd.show_status=auto rd.udev.log_priority=3 ${additional_arguments}"
+options root=LABEL=frzr_root rw rootflags=subvol=deployments/${version} quiet splash loglevel=3 rd.systemd.show_status=auto rd.udev.log_priority=3 ${additional_arguments} ${swap_arguments}"
 
 }
 
@@ -270,7 +327,15 @@ main() {
 		ADDITIONAL_ARGUMENTS="$ADDITIONAL_ARGUMENTS $(cat ${SUBVOL}/usr/lib/frzr.d/bootconfig.conf)"
 	fi
 
-	get_boot_cfg "${NAME}" "${AMD_UCODE}" "${INTEL_UCODE}" "${ADDITIONAL_ARGUMENTS}" > ${BOOT_CFG}
+	create_swap "${MOUNT_PATH}" "${SUBVOL}"
+	SWAP_ARGUMENTS=""
+	if [ -f ${MOUNT_PATH}/swap/swapfile ] ; then
+		resume="resume=PARTUUID=$(lsblk -no PARTUUID $(mount | grep " ${MOUNT_PATH} " | cut -d' ' -f1))"
+		resume_offset="resume_offset=$(btrfs inspect-internal map-swapfile -r ${MOUNT_PATH}/swap/swapfile)"
+		SWAP_ARGUMENTS="${resume} ${resume_offset}"
+	fi
+
+	get_boot_cfg "${NAME}" "${AMD_UCODE}" "${INTEL_UCODE}" "${ADDITIONAL_ARGUMENTS}" "${SWAP_ARGUMENTS}" > ${BOOT_CFG}
 	echo "default frzr.conf" > ${MOUNT_PATH}/boot/loader/loader.conf
 
 	# Check if there are migrations available
