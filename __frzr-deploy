@@ -312,9 +312,8 @@ main() {
 			api_cdns=($(get_conf_value "${GITHUB_CDN_FILE}" "api" "server"))
 			if [ -n "${api_cdns}" ]; then
 				API_CND=$(get_random_value "${api_cdns[@]}")
-				echo "Using GitHub API CDN: ${API_CND}"
+				echo "# API: ${API_CND} #"
 				RELEASES_URL="${API_CND}/repos/${REPO}/releases"
-				echo "Using GitHub API CDN: ${RELEASES_URL}"
 			fi
 		fi
 
@@ -323,9 +322,8 @@ main() {
 			img_cdns=($(get_conf_value "${GITHUB_CDN_FILE}" "release" "server"))
 			if [ -n "${img_cdns}" ]; then
 				IMG_CND=$(get_random_value "${img_cdns[@]}")
-				echo "Using GitHub release CDN: ${IMG_CND}"
+				echo "# Release: ${IMG_CND} #"
 				IMG_URL=$(echo "${IMG_URL}" | sed "s#^https://.*/${REPO}#${IMG_CND}/${REPO}#")
-				echo "Using GitHub release CDN: ${IMG_URL}"
 			fi
 		fi
 
