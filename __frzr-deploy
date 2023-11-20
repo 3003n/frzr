@@ -158,19 +158,54 @@ create_swap() {
 	fi
 }
 
+get_fbcon() {
+
+	# Device specific configs
+	DEVICENAME=$(cat /sys/devices/virtual/dmi/id/product_name)
+
+	# OXP
+	OXP_LIST="ONE XPLAYER:ONEXPLAYER 1 T08:ONEXPLAYER 1S A08:ONEXPLAYER 1S T08:ONEXPLAYER mini A07:ONEXPLAYER mini GA72:ONEXPLAYER mini GT72:ONEXPLAYER Mini Pro:ONEXPLAYER GUNDAM GA72:ONEXPLAYER 2 ARP23:ONEXPLAYER 2 PRO ARP23P:ONEXPLAYER 2 PRO ARP23P EVA-01:ONEXPLAYER F1"
+	# AOKZOE
+	AOK_LIST="AOKZOE A1 AR07:AOKZOE A1 Pro"
+	# AYANEO AIR
+	AIR_LIST="AIR:AIR Pro:AIR 1S"
+	AYN_LIST="Loki Max:Loki Zero:Loki MiniPro"
+	# Lenovo
+	LENOVO_LIST="83E1"
+
+	# AYANEO AYA
+	AYA_LIST="NEXT:NEXT Pro:NEXT Advance:AYANEO NEXT:AYANEO NEXT Pro:AYANEO NEXT Advance:AYA NEO Fouder:AYA NEO 2021:AYANEO 2021:AYANEO 2021 Pro:AYANEO 2021 Pro:AYANEO 2021 Pro Retro Power:AYANEO 2:GEEK:AYANEO 2S:GEEK 1S"
+	# GPD
+	GPD_LIST="G1619-01:G1621-02:MicroPC:G1617-01"
+
+
+	LEFT_LIST="${OXP_LIST}:${AIR_LIST}:${AOK_LIST}:${AYN_LIST}:${LENOVO_LIST}"
+	RIGHT_LIST="${AYA_LIST}:${GPD_LIST}"
+
+	if [[  ":${LEFT_LIST}:" =~ ":${DEVICENAME}:" ]]; then
+		echo "video=efifb fbcon=rotate:1"
+	elif [[ ":${RIGHT_LIST}:" =~ ":${DEVICENAME}:" ]]; then
+		echo "video=efifb fbcon=rotate:3"
+	else
+		echo ""
+	fi
+
+}
+
 get_boot_cfg() {
 	local version=${1}
 	local amd_ucode=${2}
 	local intel_ucode=${3}
 	local additional_arguments=${4}
 	local swap_arguments=${5}
+	local fbcon=${6}
 
 echo "title ${version}
 linux /${version}/vmlinuz-linux
 ${amd_ucode}
 ${intel_ucode}
 initrd /${version}/initramfs-linux.img
-options root=LABEL=frzr_root rw rootflags=subvol=deployments/${version} quiet splash loglevel=3 rd.systemd.show_status=auto rd.udev.log_priority=3 ${additional_arguments} ${swap_arguments}"
+options root=LABEL=frzr_root rw rootflags=subvol=deployments/${version} quiet splash loglevel=3 rd.systemd.show_status=auto rd.udev.log_priority=3 ${additional_arguments} ${swap_arguments} ${fbcon}"
 
 }
 
@@ -490,7 +525,9 @@ main() {
 		SWAP_ARGUMENTS="${resume} ${resume_offset}"
 	fi
 
-	get_boot_cfg "${NAME}" "${AMD_UCODE}" "${INTEL_UCODE}" "${ADDITIONAL_ARGUMENTS}" "${SWAP_ARGUMENTS}" > ${BOOT_CFG}
+	FBCON="$(get_fbcon)"
+
+	get_boot_cfg "${NAME}" "${AMD_UCODE}" "${INTEL_UCODE}" "${ADDITIONAL_ARGUMENTS}" "${SWAP_ARGUMENTS} ${FBCON}" > ${BOOT_CFG}
 	echo "default frzr.conf" > ${MOUNT_PATH}/boot/loader/loader.conf
 
 	# Check if there are migrations available
