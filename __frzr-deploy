@@ -183,9 +183,9 @@ get_fbcon() {
 	RIGHT_LIST="${AYA_LIST}:${GPD_LIST}"
 
 	if [[  ":${LEFT_LIST}:" =~ ":${DEVICENAME}:" ]]; then
-		echo "video=efifb fbcon=rotate:1"
-	elif [[ ":${RIGHT_LIST}:" =~ ":${DEVICENAME}:" ]]; then
 		echo "video=efifb fbcon=rotate:3"
+	elif [[ ":${RIGHT_LIST}:" =~ ":${DEVICENAME}:" ]]; then
+		echo "video=efifb fbcon=rotate:1"
 	else
 		echo ""
 	fi
