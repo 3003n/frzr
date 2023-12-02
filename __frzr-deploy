@@ -158,27 +158,6 @@ create_swap() {
 	fi
 }
 
-create_nix() {
-	local mount_path=${1}
-
-	# check nix subvolume
-	if [ ! -d "$mount_path/nix" ]; then
-    	echo "$mount_path/nix does not exist. creating subvolume..."
-
-    	# create subvolume
-    	btrfs subvolume create $mount_path/nix
-	else
-    	# check if subvolume exists
-    	if btrfs subvolume show "$mount_path/nix" &> /dev/null; then
-    		echo "$mount_path/nix is a Btrfs subvolume."
-    	else
-    		echo "$mount_path/nix exists but is not a Btrfs subvolume."
-    		rm -rf $mount_path/nix
-    		btrfs subvolume create $mount_path/nix
-    	fi
-	fi
-}
-
 get_fbcon() {
 
 	# Device specific configs
@@ -550,8 +529,6 @@ main() {
 
 	get_boot_cfg "${NAME}" "${AMD_UCODE}" "${INTEL_UCODE}" "${ADDITIONAL_ARGUMENTS}" "${SWAP_ARGUMENTS} ${FBCON}" > ${BOOT_CFG}
 	echo "default frzr.conf" > ${MOUNT_PATH}/boot/loader/loader.conf
-
-	create_nix "${MOUNT_PATH}"
 
 	# Check if there are migrations available
 	if compgen -G "${SUBVOL}"/usr/lib/frzr.d/*.migration > /dev/null ; then

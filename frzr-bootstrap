@@ -93,7 +93,6 @@ mount -t btrfs -o nodatacow ${PART2} ${MOUNT_PATH}
 
 btrfs subvolume create ${MOUNT_PATH}/var
 btrfs subvolume create ${MOUNT_PATH}/home
-btrfs subvolume create ${MOUNT_PATH}/nix
 
 mkdir -p ${MOUNT_PATH}/home/${USERNAME}
 chown 1000:1000 ${MOUNT_PATH}/home/${USERNAME}
