@@ -20,7 +20,7 @@ while read -r line; do
 	device_list+=("$model ($size)")
 done <<< "$device_output"
 
-DISK=$(whiptail --nocancel --menu "Choose a disk to install to:" 20 50 5 "${device_list[@]}" 3>&1 1>&2 2>&3)
+DISK=$(whiptail --nocancel --menu "选择要安装到的磁盘:" 20 50 5 "${device_list[@]}" 3>&1 1>&2 2>&3)
 
 # Checking for existing installation
 
@@ -29,7 +29,7 @@ REPAIR=false
 if (lsblk -o label ${DISK} | grep -q frzr_efi); then
     echo "Existing installation found"
 
-    if (whiptail --yesno --yes-button "Repair" --no-button "Clean" "WARNING: $DISK appears to already have a system installed. Would you like to repair it or do a clean install?\n\nNOTE: A clean install will delete everything on the disk, but a repair install will preserve your user data." 13 70); then
+    if (whiptail --yesno --yes-button "修复" --no-button "全新安装" "警告: $DISK 似乎已经安装了系统。您想要修复它还是进行全新安装?\n\n注意: 进行全新安装将删除磁盘上的所有内容, 但修复安装将保留您的用户数据。" 13 70); then
         echo "User chose to do a repair install"
         REPAIR=true
     else
@@ -65,7 +65,7 @@ fi
 
 ########## Doing a fresh install
 
-if ! (whiptail --yesno "WARNING: $DISK will now be formatted. All data on the disk will be lost. Do you wish to proceed?" 10 50); then
+if ! (whiptail --yesno "警告: DISK 将被格式化。磁盘上的所有数据将丢失。您是否要继续?" 10 50); then
 	echo "installation aborted"
 	exit 1
 fi
