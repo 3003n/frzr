@@ -66,6 +66,7 @@ fi
 ########## Doing a fresh install
 
 if ! (whiptail --yesno "警告: $DISK 将被格式化。磁盘上的所有数据将丢失。您是否要继续?" 10 50); then
+	whiptail --msgbox "安装已取消" 10 50
 	echo "installation aborted"
 	exit 1
 fi
