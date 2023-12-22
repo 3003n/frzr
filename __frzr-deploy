@@ -102,6 +102,15 @@ get_img_url() {
 	echo $result
 }
 
+mk_swapfile() {
+	SWAPFILE=${1:-}
+	SWAPSIZE=${2:-}
+
+	dd if=/dev/zero of="$SWAPFILE" bs=1M count="$SWAPSIZE"
+	chmod 600 "$SWAPFILE"
+	mkswap -U clear "$SWAPFILE" 
+}
+
 create_swap() {
     local mount_path=${1}
     local deployment_dir=${2}
@@ -111,6 +120,9 @@ create_swap() {
 
 	local available_space=$(df -B 1G --output=avail "$mount_path" | tail -n 1)
     local required_space=ram_size
+
+	SWAPFILE="$mount_path/swap/swapfile"
+	SWAPSIZE="${ram_size}GiB"
 
 	# check swap subvolume
 	if [ ! -d "$mount_path/swap" ]; then
@@ -132,28 +144,31 @@ create_swap() {
 	fi
 
 	# create swapfile
-    if [ ! -f "$mount_path/swap/swapfile" ]; then
-        btrfs filesystem mkswapfile --size "$ram_size"GiB "$mount_path/swap/swapfile"
+	echo "Creating swapfile..."
+    if [ ! -f "$SWAPFILE" ]; then
+        # btrfs filesystem mkswapfile --size "$ram_size"GiB "$mount_path/swap/swapfile"
+		
+		mk_swapfile "$SWAPFILE" "$SWAPSIZE"
     else
         echo "Swapfile appears to already exist"
-		existing_file_type=$(file "$mount_path/swap/swapfile" | cut -d' ' -f2-)
+		existing_file_type=$(file "$SWAPFILE" | cut -d' ' -f2-)
 		if [[ "$existing_file_type" == *"Linux swap file"* ]]; then
 			echo "Swapfile is a Linux swap file"
-			if swapon --show | grep -q "$mount_path/swap/swapfile"; then
+			if swapon --show | grep -q "$SWAPFILE"; then
 				echo "Swapfile is already enabled"
 			else
 				echo "Enabling swapfile"
-				swapon "$mount_path/swap/swapfile"
+				swapon "$SWAPFILE"
 				if [ $? -ne 0 ]; then
 					echo "Failed to enable swapfile"
-					rm -rf $mount_path/swap/swapfile
-					btrfs filesystem mkswapfile --size "$ram_size"GiB "$mount_path/swap/swapfile"
+					rm -rf $SWAPFILE
+					mk_swapfile "$SWAPFILE" "$SWAPSIZE"
 				fi
 			fi
 		else
 			echo "Swapfile exists but is not a Linux swap file"
-			rm -rf $mount_path/swap/swapfile
-			btrfs filesystem mkswapfile --size "$ram_size"GiB "$mount_path/swap/swapfile"
+			rm -rf $SWAPFILE
+			mk_swapfile "$SWAPFILE" "$SWAPSIZE"
 		fi
 	fi
 }
