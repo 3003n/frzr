@@ -115,7 +115,7 @@ create_swap() {
     local mount_path=${1}
     local deployment_dir=${2}
 
-	local ram_info=$(sudo dmidecode -t 17 | grep Size)
+	local ram_info=$(dmidecode -t 17 | grep Size)
 	local ram_size=$(echo "$ram_info" | awk '{sum += $2} END {print sum}')
 
 	local available_space=$(df -B 1G --output=avail "$mount_path" | tail -n 1)
