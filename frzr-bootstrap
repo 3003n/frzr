@@ -79,10 +79,8 @@ fi
 
 mkdir -p ${MOUNT_PATH}
 
-# umount all partitions on the disk
-for i in $(lsblk -o MOUNTPOINT ${DISK} | grep -v MOUNTPOINT | grep -v "^$" | tac); do
-	umount $i
-done
+umount ${MOUNT_PATH}/boot/ || true
+umount ${MOUNT_PATH}/ || true
 
 # create partition table and create and mount the btrfs filesystem
 parted --script ${DISK} \
