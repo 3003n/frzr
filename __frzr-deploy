@@ -453,7 +453,9 @@ main() {
 			fi
 		fi
 
-		IMG_URL=$(curl --http1.1 -L -s "${RELEASES_URL}" | get_img_url "${CHANNEL}")
+		RELEASES=$(curl --http1.1 -L -s "${RELEASES_URL}")
+
+		IMG_URL=$(echo $RELEASES | get_img_url "${CHANNEL}")
 		if [ -f "${GITHUB_CDN_FILE}" ]; then
 			img_cdns=($(get_conf_value "${GITHUB_CDN_FILE}" "release" "server"))
 			if [[ -n "${img_cdns}" && "$enable_release_cdn" == "true" ]]; then
