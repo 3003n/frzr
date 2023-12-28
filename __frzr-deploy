@@ -75,7 +75,7 @@ get_img_url() {
 	else
 		# Match any release with CHANNEL as a tag (including unstable)
 		result=$(echo ${result} | jq "[ .[] | select(.prerelease==true) | select(.name|test(\"\\\[${CHANNEL}\\\]\" ; \"i\")) ]")
-			if unstable_release_date=$(echo "${result}" | jq -er "[ .[] |
+		if unstable_release_date=$(echo "${result}" | jq -er "[ .[] |
 					select(.prerelease==true) |
 					select(.name|test(\"\\\[${CHANNEL}\\\]\" ; \"i\")) ] |
 					first |
@@ -89,11 +89,12 @@ get_img_url() {
 						select(.browser_download_url | test(\"img\")) |
 						.browser_download_url"
 					)
-			if [ $(date -d $unstable_release_date +%s) -le $(date -d $stable_release_date +%s) ]; then
-				result=$stable_download_url
-			else
-				result=$unstable_url
-			fi
+			# if [ $(date -d $unstable_release_date +%s) -le $(date -d $stable_release_date +%s) ]; then
+			# 	result=$stable_download_url
+			# else
+			# 	result=$unstable_url
+			# fi
+			result=$unstable_url
 		else
 			result=$stable_download_url
 		fi
@@ -454,6 +455,11 @@ main() {
 		fi
 
 		RELEASES=$(curl --http1.1 -L -s "${RELEASES_URL}")
+
+		if echo "$RELEASES" | grep -q "API rate limit"; then
+			echo "GitHub API rate limit exceeded"
+			exit 29
+		fi
 
 		IMG_URL=$(echo $RELEASES | get_img_url "${CHANNEL}")
 		if [ -f "${GITHUB_CDN_FILE}" ]; then
