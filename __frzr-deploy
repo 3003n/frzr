@@ -73,6 +73,30 @@ get_img_url() {
 			result=$stable_download_url
 		fi
 	else
+
+		# 如果 CHANNEL 以 -dev 结尾
+		if [[ "$CHANNEL" =~ -dev$ ]]; then
+			# CHANNEL 去掉末尾的 -dev
+			CHANNEL_STABLE=$(echo "${CHANNEL}" | sed 's/-dev$//')
+			result_stable=$(echo ${result} | jq "[ .[] | select(.prerelease==false) | select(.name|test(\"\\\[${CHANNEL_STABLE}\\\]\" ; \"i\")) ]")
+			if stable_release_date=$(echo "${result_stable}" | jq -er "[ .[] |
+					select(.prerelease==false) |
+					select(.name|test(\"\\\[${CHANNEL_STABLE}\\\]\" ; \"i\")) ] |
+					first |
+					.created_at"
+				); then
+				stable_download_url=$(echo "${result_stable}" | jq -r "[ .[] |
+					select(.prerelease==false) |
+					select(.name|test(\"\\\[${CHANNEL_STABLE}\\\]\" ; \"i\")) ] |
+					first |
+					.assets[] |
+					select(.browser_download_url | test(\"img\")) |
+					.browser_download_url"
+				)
+			fi
+		fi
+
+
 		# Match any release with CHANNEL as a tag (including unstable)
 		result=$(echo ${result} | jq "[ .[] | select(.prerelease==true) | select(.name|test(\"\\\[${CHANNEL}\\\]\" ; \"i\")) ]")
 		if unstable_release_date=$(echo "${result}" | jq -er "[ .[] |
@@ -89,12 +113,16 @@ get_img_url() {
 						select(.browser_download_url | test(\"img\")) |
 						.browser_download_url"
 					)
-			# if [ $(date -d $unstable_release_date +%s) -le $(date -d $stable_release_date +%s) ]; then
-			# 	result=$stable_download_url
-			# else
-			# 	result=$unstable_url
-			# fi
-			result=$unstable_url
+			
+			unstable_release_time=$(date -d $unstable_release_date +%s)
+			stable_release_time=$(date -d $stable_release_date +%s)
+			# CHANNEL 为 unstable 或者 CHANNEL_STABLE 不为空, 并且 unstable_release_time 小于等于 stable_release_time
+			if [[ "$CHANNEL" == "unstable" || ! -z "$CHANNEL_STABLE" ]] && [ $unstable_release_time -le $stable_release_time ]; then
+				result=$stable_download_url
+			else
+				result=$unstable_url
+			fi
+			
 		else
 			result=$stable_download_url
 		fi
