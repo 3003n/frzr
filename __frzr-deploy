@@ -349,6 +349,30 @@ get_random_value() {
     echo "${array[$random_index]}"
 }
 
+get_fallback_url() {
+	local base_url=$1
+	local img_file_name=$2
+
+	fallback_base="http://honjow.cn:5044"
+	fallback_api_url="${fallback_base}/api/get/list/Cloud189/img/"
+	fallback_file_url="${fallback_base}/file/"
+
+	local fallback_url=$(curl --http1.1 -L -s "${base_url}/fallback_url.txt")
+	# if fallback_url.txt contains "Not Found" 
+	if echo "$fallback_url" | grep -q "Not Found"; then
+		fallback_url=""
+		# get the fallback url from the fallback api
+		file_info=$(curl --http1.1 -L -s -d "{}" -H "Content-Type:application/json" "${fallback_api_url}${img_file_name}")
+		if [[ ! -z "$file_info" ]]; then
+			fallback_path=$(echo "$file_info" | jq -r '.msg | first | .filePath' 2&> /dev/null)
+			if [[ ! -z "$fallback_path" && fallback_path != "null" ]]; then
+				fallback_url="${fallback_file_url}${fallback_path}${img_file_name}"
+			fi
+		fi
+  	fi
+	echo "$fallback_url"
+}
+
 
 main() {
 	if [ $EUID -ne 0 ]; then
@@ -515,11 +539,7 @@ main() {
 		SUBVOL="${DEPLOY_PATH}/${NAME}"
 		IMG_FILE="${MOUNT_PATH}/${FILE_NAME}"
 
-		FALLBACK_URL=$(curl --http1.1 -L -s "${BASE_URL}/fallback_url.txt")
-		# if fallback_url.txt contains "Not Found" 
-		if echo "$FALLBACK_URL" | grep -q "Not Found"; then
-    		FALLBACK_URL=""
-  		fi
+		FALLBACK_URL=$(get_fallback_url "${BASE_URL}" "${FILE_NAME}")
 
 		# if the fallback url is not empty, set the img_url to the fallback url
 		if [[ ! -z "$FALLBACK_URL" && "$enable_fallback_url" == "true" ]]; then
