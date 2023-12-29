@@ -355,7 +355,7 @@ get_fallback_url() {
 
 	fallback_base="http://honjow.cn:5044"
 	fallback_api_url="${fallback_base}/api/get/list/Cloud189/img/"
-	fallback_file_url="${fallback_base}/file/"
+	fallback_file_url="${fallback_base}/file/Cloud189/img/"
 
 	local fallback_url=$(curl --http1.1 -L -s "${base_url}/fallback_url.txt")
 	# if fallback_url.txt contains "Not Found" 
@@ -364,9 +364,11 @@ get_fallback_url() {
 		# get the fallback url from the fallback api
 		file_info=$(curl --http1.1 -L -s -d "{}" -H "Content-Type:application/json" "${fallback_api_url}${img_file_name}")
 		if [[ ! -z "$file_info" ]]; then
-			fallback_path=$(echo "$file_info" | jq -r '.msg | first | .filePath' 2&> /dev/null)
-			if [[ ! -z "$fallback_path" && fallback_path != "null" ]]; then
-				fallback_url="${fallback_file_url}${fallback_path}${img_file_name}"
+			fallback_file_id=$(echo "$file_info" | jq -r '.msg | first | .fileId' 2&> /dev/null)
+			fallback_user=$(echo "$file_info" | jq -r '.msg | first | .user' 2&> /dev/null)
+			if [[ ! -z "$fallback_file_id" && "$fallback_file_id" != "null" ]]; then
+				fallback_url="${fallback_file_url}${img_file_name}"
+				# fallback_url="${fallback_base}/file/${fallback_user}/?id=${fallback_file_id}"
 			fi
 		fi
   	fi
