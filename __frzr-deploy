@@ -78,15 +78,13 @@ get_img_url() {
 		if [[ "$CHANNEL" =~ -dev$ ]]; then
 			# CHANNEL 去掉末尾的 -dev
 			CHANNEL_STABLE=$(echo "${CHANNEL}" | sed 's/-dev$//')
-			result_stable=$(echo ${result} | jq "[ .[] | select(.prerelease==false) | select(.name|test(\"\\\[${CHANNEL_STABLE}\\\]\" ; \"i\")) ]")
+			result_stable=$(echo ${result} | jq "[ .[] | select(.name|test(\"\\\[${CHANNEL_STABLE}\\\]\" ; \"i\")) ]")
 			if stable_release_date=$(echo "${result_stable}" | jq -er "[ .[] |
-					select(.prerelease==false) |
 					select(.name|test(\"\\\[${CHANNEL_STABLE}\\\]\" ; \"i\")) ] |
 					first |
 					.created_at"
 				); then
 				stable_download_url=$(echo "${result_stable}" | jq -r "[ .[] |
-					select(.prerelease==false) |
 					select(.name|test(\"\\\[${CHANNEL_STABLE}\\\]\" ; \"i\")) ] |
 					first |
 					.assets[] |
