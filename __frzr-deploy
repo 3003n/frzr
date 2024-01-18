@@ -200,6 +200,28 @@ create_swap() {
 	fi
 }
 
+create_nix() {
+	local mount_path=${1}
+
+	nix_path="$mount_path/nix"
+	# check nix subvolume
+	if [ ! -d "$nix_path" ]; then
+		echo "$nix_path does not exist. creating subvolume..."
+
+		# create subvolume
+		btrfs subvolume create $nix_path
+	else
+		# check if subvolume exists
+		if btrfs subvolume show "$nix_path" &> /dev/null; then
+			echo "$nix_path is a Btrfs subvolume."
+		else
+			echo "$nix_path exists but is not a Btrfs subvolume."
+			rm -rf $nix_path
+			btrfs subvolume create $nix_path
+		fi
+	fi
+}
+
 get_fbcon() {
 
 	# Device specific configs
@@ -618,6 +640,8 @@ main() {
 		resume_offset="resume_offset=$(btrfs inspect-internal map-swapfile -r ${MOUNT_PATH}/swap/swapfile)"
 		SWAP_ARGUMENTS="${resume} ${resume_offset}"
 	fi
+
+	create_nix "${MOUNT_PATH}"
 
 	FBCON="$(get_fbcon)"
 
