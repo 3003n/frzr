@@ -384,8 +384,8 @@ get_fallback_url() {
 		# get the fallback url from the fallback api
 		file_info=$(curl --http1.1 -L -s -d "{}" -H "Content-Type:application/json" "${fallback_api_url}${img_file_name}")
 		if [[ ! -z "$file_info" ]]; then
-			fallback_file_id=$(echo "$file_info" | jq -r '.msg | first | .fileId' 2&> /dev/null)
-			fallback_user=$(echo "$file_info" | jq -r '.msg | first | .user' 2&> /dev/null)
+			fallback_file_id=$(echo "$file_info" | jq -r '.msg | first | .fileId' 2> /dev/null)
+			fallback_user=$(echo "$file_info" | jq -r '.msg | first | .user' 2> /dev/null)
 			if [[ ! -z "$fallback_file_id" && "$fallback_file_id" != "null" ]]; then
 				fallback_url="${fallback_file_url}${img_file_name}"
 				# fallback_url="${fallback_base}/file/${fallback_user}/?id=${fallback_file_id}"
