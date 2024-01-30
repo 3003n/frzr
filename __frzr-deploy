@@ -74,10 +74,10 @@ get_img_url() {
 		fi
 	else
 
-		# 如果 CHANNEL 以 -dev 结尾
-		if [[ "$CHANNEL" =~ -dev$ ]]; then
-			# CHANNEL 去掉末尾的 -dev
-			CHANNEL_STABLE=$(echo "${CHANNEL}" | sed 's/-dev$//')
+		# 如果 CHANNEL 以 -任意字符结尾
+		if [[ "$CHANNEL" =~ -[^-]*$ ]]; then
+			# CHANNEL 去掉最后一个 - 及其后面的内容
+			CHANNEL_STABLE=$(echo "${CHANNEL}" | sed 's/-[^-]*$//')
 			result_stable=$(echo ${result} | jq "[ .[] | select(.name|test(\"\\\[${CHANNEL_STABLE}\\\]\" ; \"i\")) ]")
 			if stable_release_date=$(echo "${result_stable}" | jq -er "[ .[] |
 					select(.name|test(\"\\\[${CHANNEL_STABLE}\\\]\" ; \"i\")) ] |
