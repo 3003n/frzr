@@ -641,7 +641,7 @@ main() {
 		SWAP_ARGUMENTS="${resume} ${resume_offset}"
 	fi
 
-	create_nix "${MOUNT_PATH}"
+	# create_nix "${MOUNT_PATH}"
 
 	FBCON="$(get_fbcon)"
 
