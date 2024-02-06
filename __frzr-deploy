@@ -3,6 +3,10 @@
 set -e
 set -o pipefail
 
+if [[ -n "${DEBUG}" ]]; then
+	set -x
+fi
+
 get_img_url() {
 	CHANNEL=$1
 
