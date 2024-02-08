@@ -496,12 +496,7 @@ main() {
 		NAME=$(echo "${FILE_NAME}" | cut -f 1 -d '.')
 		SUBVOL="${DEPLOY_PATH}/${NAME}"
 		IMG_FILE="/root/tmp_source/${FILE_NAME}"
-	elif [[ "$FRZR_SOURCE" == *".img.tar.xz" ]]; then
-		FILE_NAME=$(basename ${FRZR_SOURCE})
-		NAME=$(echo "${FILE_NAME}" | cut -f 1 -d '.')
-		SUBVOL="${DEPLOY_PATH}/${NAME}"
-		IMG_FILE=${FRZR_SOURCE}
-	elif [[ "$FRZR_SOURCE" == *".img" ]]; then
+	elif [[ "$FRZR_SOURCE" =~ \.img(\.tar\.xz|\.xz|\.zst)?$ ]]; then
 		FILE_NAME=$(basename ${FRZR_SOURCE})
 		NAME=$(echo "${FILE_NAME}" | cut -f 1 -d '.')
 		SUBVOL="${DEPLOY_PATH}/${NAME}"
@@ -610,10 +605,24 @@ main() {
 		whiptail --infobox "提取并安装系统镜像 (${NAME}), 这可能需要一些时间。" 10 50
 	fi
 
+	# if [[ "${IMG_FILE##*.}" == "img" ]]; then
+	# 	btrfs receive --quiet ${DEPLOY_PATH} < ${IMG_FILE}
+	# else
+	# 	tar xfO ${IMG_FILE} | btrfs receive --quiet ${DEPLOY_PATH}
+	# fi
 	if [[ "${IMG_FILE##*.}" == "img" ]]; then
 		btrfs receive --quiet ${DEPLOY_PATH} < ${IMG_FILE}
+	elif [[ "${IMG_FILE##*.}" == "zst" ]]; then
+		zstd -d -c ${IMG_FILE} | btrfs receive --quiet ${DEPLOY_PATH}
+	elif [[ "${IMG_FILE##*.}" == "xz" ]]; then
+		if [[ "${IMG_FILE}" == *".tar.xz" ]]; then
+			tar xfO ${IMG_FILE} | btrfs receive --quiet ${DEPLOY_PATH}
+		else
+			xz -dc ${IMG_FILE} | btrfs receive --quiet ${DEPLOY_PATH}
+		fi
 	else
-		tar xfO ${IMG_FILE} | btrfs receive --quiet ${DEPLOY_PATH}
+		# Handle other cases or provide an error message
+		echo "Unsupported file format: ${IMG_FILE}"
 	fi
 
 	mkdir -p ${MOUNT_PATH}/boot/${NAME}
