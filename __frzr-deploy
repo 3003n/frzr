@@ -527,7 +527,7 @@ main() {
 			fi
 		fi
 
-		RELEASES=$(curl --http1.1 -L -s "${RELEASES_URL}")
+		RELEASES=$(curl --http1.1 -L -s -m 15 "${RELEASES_URL}")
 
 		if echo "$RELEASES" | grep -q "API rate limit"; then
 			echo "GitHub API rate limit exceeded"
