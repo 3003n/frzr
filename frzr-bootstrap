@@ -8,6 +8,8 @@ if [ $EUID -ne 0 ]; then
 fi
 
 MOUNT_PATH=/tmp/frzr_root
+umount ${MOUNT_PATH}/boot/ || true
+umount ${MOUNT_PATH}/ || true
 
 device_list=()
 device_output=`lsblk --list -n -o name,model,size,type | grep disk | tr -s ' ' '\t'`
@@ -78,9 +80,6 @@ if [ ! -z $1 ]; then
 fi
 
 mkdir -p ${MOUNT_PATH}
-
-umount ${MOUNT_PATH}/boot/ || true
-umount ${MOUNT_PATH}/ || true
 
 # create partition table and create and mount the btrfs filesystem
 parted --script ${DISK} \
