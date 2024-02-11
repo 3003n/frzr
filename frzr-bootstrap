@@ -46,8 +46,8 @@ fi
 if [ "${REPAIR}" == true ]; then
 
 	mkdir -p ${MOUNT_PATH}
-	INSTALL_MOUNT=$(fdisk -o Device --list ${DISK} | grep "^${DISK}.*2$")
-	BOOT_EFI=$(fdisk -o Device --list ${DISK} | grep "^${DISK}.*1$")
+	INSTALL_MOUNT=$(lsblk -rno "path,label" ${DISK} | grep "frzr_root" | awk '{print $1}')
+	BOOT_EFI=$(lsblk -rno "path,label" ${DISK} | grep "frzr_efi" | awk '{print $1}')
 	mount ${INSTALL_MOUNT} ${MOUNT_PATH}
 	mount -t vfat ${BOOT_EFI} ${MOUNT_PATH}/boot/
 	rm -rf ${MOUNT_PATH}/boot/*
