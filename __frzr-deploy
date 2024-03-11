@@ -653,7 +653,7 @@ main() {
 		ADDITIONAL_ARGUMENTS="$ADDITIONAL_ARGUMENTS $(cat ${SUBVOL}/usr/lib/frzr.d/bootconfig.conf)"
 	fi
 
-	create_swap "${MOUNT_PATH}" "${SUBVOL}"
+	# create_swap "${MOUNT_PATH}" "${SUBVOL}"
 	SWAP_ARGUMENTS=""
 	if [ -f ${MOUNT_PATH}/swap/swapfile ] ; then
 		resume="resume=PARTUUID=$(lsblk -no PARTUUID $(mount | grep " ${MOUNT_PATH} " | cut -d' ' -f1))"
@@ -703,7 +703,11 @@ main() {
 
 	echo "deployment complete; restart to boot into ${NAME}"
 
-	umount -R -l ${MOUNT_PATH}
+	if [[ $NOT_UMOUNT == true ]]; then
+		echo "Not unmounting ${MOUNT_PATH}"
+	else
+		umount -R -l ${MOUNT_PATH}
+	fi
 }
 
 
