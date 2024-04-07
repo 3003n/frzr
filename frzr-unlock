@@ -32,7 +32,11 @@ DEPLOYMENT=$(frzr-release)
 # set to read-write mode
 mount -o remount,rw /
 btrfs property set -fts /frzr_root/deployments/${DEPLOYMENT} ro false
-sed -i -e 's/,ro,/,rw,/' /etc/fstab
+# sed -i -e 's/,ro,/,rw,/' /etc/fstab
+# if ',ro,' in /etc/fstab, replace with ',rw,'
+if grep -q ',ro,' /etc/fstab; then
+	sed -i -e 's/,ro,/,rw,/' /etc/fstab
+fi
 systemctl daemon-reload
 
 
