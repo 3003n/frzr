@@ -705,12 +705,6 @@ main() {
 	rm -rf /var/lib/pacman # undo frzr-unlock
 
 	echo "deployment complete; restart to boot into ${NAME}"
-
-	if [[ $NOT_UMOUNT == true ]]; then
-		echo "Not unmounting ${MOUNT_PATH}"
-	else
-		umount -R -l ${MOUNT_PATH}
-	fi
 }
 
 
