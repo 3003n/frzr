@@ -1,5 +1,7 @@
 #! /bin/bash
 
+set -e
+
 if [ $EUID -ne 0 ]; then
     echo "$(basename $0) must be run as root"
     exit 1
@@ -7,18 +9,18 @@ fi
 
 # Check if script is being ran frmo the install media
 if [ -d /tmp/frzr_root ]; then
-    
+
     if [ -d "${SUBVOL}" ]; then
-        
+
         cd ${SUBVOL}
         # Mount necessary file systems
         mount -t proc /proc proc/
         mount -t sysfs /sys sys/
         mount --rbind /dev dev/
-        
+
         # Set R/W permissions
         btrfs property set -fts ${SUBVOL} ro false
-	chroot ${SUBVOL} /bin/bash <<EOF
+        chroot ${SUBVOL} /bin/bash <<EOF
 # Commands to be ran in chroot
 
 ### Create distro mkinitcpio preset
@@ -37,11 +39,11 @@ mkinitcpio -p \${NAME%%-*}
 EOF
         # Set back to R/O permissions
         btrfs property set -fts ${SUBVOL} ro true
-	# unmount filesystems
-	umount -l ${SUBVOL}/proc
-    	umount -l ${SUBVOL}/sys
-    	mount --make-rslave ${SUBVOL}/dev
-    	umount -l ${SUBVOL}/dev
+        # unmount filesystems
+        umount -l ${SUBVOL}/proc
+        umount -l ${SUBVOL}/sys
+        mount --make-rslave ${SUBVOL}/dev
+        umount -l ${SUBVOL}/dev
     else
         echo "No deployment directory found"
         exit 1
@@ -49,7 +51,6 @@ EOF
 else
     echo "We don't appear to be running from an arch install media"
 fi
-
 
 # Build initramfs from within a deployed system
 if [ -d /frzr_root ]; then
@@ -68,7 +69,7 @@ if [ -d /frzr_root ]; then
 
     BUILD="$ID"-"$VERSIONID"_"$BUILDID"
     DEPLOYMENT_PATH="/frzr_root/deployments/$BUILD"
-    
+
     # Get locked state
     RELOCK=0
     LOCK_STATE=$(btrfs property get -fts "$DEPLOYMENT_PATH")
@@ -78,11 +79,11 @@ if [ -d /frzr_root ]; then
     else
         echo "Filesystem appears to be unlocked"
     fi
-    
+
     echo "Generating configuration for $BUILD"
-    
+
     ### Rebuild Initramfs with custom preset
-    
+
     if [ -n "$SUBVOL" ]; then
         cd ${SUBVOL}
         # Mount necessary file systems
@@ -90,8 +91,8 @@ if [ -d /frzr_root ]; then
         mount -t sysfs /sys sys/
         mount --rbind /dev dev/
 
-	# We have to chroot for new images or else the kernel version can cause initramfs building to fail
-	chroot ${SUBVOL} /bin/bash <<EOF
+        # We have to chroot for new images or else the kernel version can cause initramfs building to fail
+        chroot ${SUBVOL} /bin/bash <<EOF
 # Commands to be ran in chroot
 ### Create distro mkinitcpio preset
 echo '
@@ -107,12 +108,24 @@ default_image="/boot/initramfs-linux.img"
 ### Rebuild Initramfs with custom preset
 mkinitcpio -p \${NAME%%-*}
 EOF
-    umount -l ${SUBVOL}/proc
-    umount -l ${SUBVOL}/sys
-    mount --make-rslave ${SUBVOL}/dev
-    umount -l ${SUBVOL}/dev
+        umount -l ${SUBVOL}/proc
+        umount -l ${SUBVOL}/sys
+        mount --make-rslave ${SUBVOL}/dev
+        umount -l ${SUBVOL}/dev
+    elif grep -q "HOOKS=.*systemd" /etc/mkinitcpio.conf; then
+        echo '
+ALL_config="/etc/mkinitcpio.conf"
+ALL_kver="/boot/vmlinuz-linux"
+ALL_microcode=(/boot/*-ucode.img)
+
+PRESETS="default"
+
+default_image="/boot/initramfs-linux.img"
+' >/etc/mkinitcpio.d/$ID.preset
+        # If we are not doing a deployment then this will be used for local installs to rebuild initramfs
+        mkinitcpio -p $ID
     else
-       echo '
+        echo '
 ALL_config="/etc/mkinitcpio.conf"
 ALL_kver="/boot/'$BUILD'/vmlinuz-linux"
 ALL_microcode=(/boot/'$BUILD'/*-ucode.img)
@@ -120,15 +133,17 @@ ALL_microcode=(/boot/'$BUILD'/*-ucode.img)
 PRESETS="default"
 
 default_image="/boot/'$BUILD'/initramfs-linux.img"
-' > /etc/mkinitcpio.d/$ID.preset
-       # If we are not doing a deployment then this will be used for local installs to rebuild initramfs
-       mkinitcpio -p $ID
+' >/etc/mkinitcpio.d/$ID.preset
+        # If we are not doing a deployment then this will be used for local installs to rebuild initramfs
+        mkinitcpio -p $ID
     fi
-    
+
     if [[ $RELOCK == 1 ]]; then
-       btrfs property set -fts ${DEPLOYMENT_PATH} ro true
+        btrfs property set -fts ${DEPLOYMENT_PATH} ro true
     else
-       # Move rebuilt images to the unlocked location if system was unlocked prior
-       cp /boot/$BUILD/* /boot
+        # Move rebuilt images to the unlocked location if system was unlocked prior
+        if [[ -d /boot/$BUILD ]]; then
+            cp /boot/$BUILD/* /boot
+        fi
     fi
 fi
