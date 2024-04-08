@@ -112,15 +112,15 @@ EOF
         umount -l ${SUBVOL}/sys
         mount --make-rslave ${SUBVOL}/dev
         umount -l ${SUBVOL}/dev
-    elif grep -q "HOOKS=.*systemd" /etc/mkinitcpio.conf; then
+    elif [[ -d "/efi/${BUILD}" ]] || grep -q "HOOKS=.*systemd" /etc/mkinitcpio.conf; then
         echo '
 ALL_config="/etc/mkinitcpio.conf"
-ALL_kver="/boot/vmlinuz-linux"
-ALL_microcode=(/boot/*-ucode.img)
+ALL_kver="/efi/'$BUILD'/vmlinuz-linux"
+ALL_microcode=(/efi/'$BUILD'/*-ucode.img)
 
 PRESETS="default"
 
-default_image="/boot/initramfs-linux.img"
+default_image="/efi/initramfs-linux.img"
 ' >/etc/mkinitcpio.d/$ID.preset
         # If we are not doing a deployment then this will be used for local installs to rebuild initramfs
         mkinitcpio -p $ID
@@ -144,6 +144,10 @@ default_image="/boot/'$BUILD'/initramfs-linux.img"
         # Move rebuilt images to the unlocked location if system was unlocked prior
         if [[ -d /boot/$BUILD ]]; then
             cp /boot/$BUILD/* /boot
+        fi
+
+        if [[ -d /efi/$BUILD ]]; then
+            cp /efi/$BUILD/* /efi
         fi
     fi
 fi
