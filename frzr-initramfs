@@ -7,6 +7,11 @@ if [ $EUID -ne 0 ]; then
     exit 1
 fi
 
+microcode_flag=""
+if grep -q "microcode" "/etc/mkinitcpio.conf"; then
+    microcode_flag="# "
+fi
+
 # Check if script is being ran frmo the install media
 if [ -d /tmp/frzr_root ]; then
 
@@ -27,7 +32,7 @@ if [ -d /tmp/frzr_root ]; then
 echo '
 ALL_config="/etc/mkinitcpio.conf"
 ALL_kver="/boot/vmlinuz-linux"
-ALL_microcode=(/boot/*-ucode.img)
+${microcode_flag}ALL_microcode=(/boot/*-ucode.img)
 
 PRESETS="default"
 
@@ -98,7 +103,7 @@ if [ -d /frzr_root ]; then
 echo '
 ALL_config="/etc/mkinitcpio.conf"
 ALL_kver="/boot/vmlinuz-linux"
-ALL_microcode=(/boot/*-ucode.img)
+${microcode_flag}ALL_microcode=(/boot/*-ucode.img)
 
 PRESETS="default"
 
@@ -116,7 +121,7 @@ EOF
         echo '
 ALL_config="/etc/mkinitcpio.conf"
 ALL_kver="/efi/'$BUILD'/vmlinuz-linux"
-ALL_microcode=(/efi/'$BUILD'/*-ucode.img)
+'${microcode_flag}'ALL_microcode=(/efi/'$BUILD'/*-ucode.img)
 
 PRESETS="default"
 
@@ -128,7 +133,7 @@ default_image="/efi/initramfs-linux.img"
         echo '
 ALL_config="/etc/mkinitcpio.conf"
 ALL_kver="/boot/'$BUILD'/vmlinuz-linux"
-ALL_microcode=(/boot/'$BUILD'/*-ucode.img)
+'${microcode_flag}'ALL_microcode=(/boot/'$BUILD'/*-ucode.img)
 
 PRESETS="default"
 
@@ -148,6 +153,7 @@ default_image="/boot/'$BUILD'/initramfs-linux.img"
 
         if [[ -d /efi/$BUILD ]]; then
             cp /efi/$BUILD/* /efi
+            cp /efi/$BUILD/* /boot
         fi
     fi
 fi

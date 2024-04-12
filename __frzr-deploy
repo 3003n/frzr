@@ -636,16 +636,26 @@ main() {
 	echo "show boot files"
 	ls -R ${SUBVOL}/boot/
 
-	AMD_UCODE=""
-	if [ -e ${SUBVOL}/boot/amd-ucode.img ] ; then
-		cp ${SUBVOL}/boot/amd-ucode.img ${MOUNT_PATH}/boot/${NAME}
-		AMD_UCODE="initrd /${NAME}/amd-ucode.img"
-	fi
+	# now that the initramfs has been built determine if that includes microcode
+	AMD_UCODE="# missing intel-ucode"
+	INTEL_UCODE="# missing intel-ucode"
 
-	INTEL_UCODE=""
-	if [ -e ${SUBVOL}/boot/intel-ucode.img ] ; then
-		cp ${SUBVOL}/boot/intel-ucode.img ${MOUNT_PATH}/boot/${NAME}
-		INTEL_UCODE="initrd /${NAME}/intel-ucode.img"
+	if grep -q "microcode" "/etc/mkinitcpio.conf"; then
+		echo "microcode hook present: will skip systemd-boot initrd."
+
+		AMD_UCODE="# amd-ucode in initramfs"
+		INTEL_UCODE="# intel-ucode in initramfs"
+	else
+		echo "microcode hook not found: will use systemd-bood initrd."
+		if [ -e ${SUBVOL}/boot/amd-ucode.img ] ; then
+			cp ${SUBVOL}/boot/amd-ucode.img ${MOUNT_PATH}/boot/${NAME}
+			AMD_UCODE="initrd /${NAME}/amd-ucode.img"
+		fi
+
+		if [ -e ${SUBVOL}/boot/intel-ucode.img ] ; then
+			cp ${SUBVOL}/boot/intel-ucode.img ${MOUNT_PATH}/boot/${NAME}
+			INTEL_UCODE="initrd /${NAME}/intel-ucode.img"
+		fi
 	fi
 
 	ADDITIONAL_ARGUMENTS=""
