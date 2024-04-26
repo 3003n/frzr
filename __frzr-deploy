@@ -490,8 +490,8 @@ main() {
 	fi
 
 	if [ "${local_install}" == true ]; then
-	        mkdir tmp_source
-	        mount -o rw -L FRZR_UPDATE /root/tmp_source
+	    mkdir tmp_source
+	    mount -o rw -L FRZR_UPDATE /root/tmp_source
 		FILE_NAME=$(basename /root/tmp_source/*.img.tar.xz*)
 		NAME=$(echo "${FILE_NAME}" | cut -f 1 -d '.')
 		SUBVOL="${DEPLOY_PATH}/${NAME}"
@@ -526,7 +526,7 @@ main() {
 			fi
 		fi
 
-		RELEASES=$(curl --http1.1 -L -s -m 15 "${RELEASES_URL}")
+		RELEASES=$(curl --http1.1 -L -s --connect-timeout 5 -m 15 "${RELEASES_URL}")
 
 		if echo "$RELEASES" | grep -q "API rate limit"; then
 			echo "GitHub API rate limit exceeded"
@@ -545,7 +545,7 @@ main() {
 
 		if [ -z "$IMG_URL" ] || [ "$IMG_URL" == "null" ]; then
 			echo "No matching source found"
-			if curl --http1.1 -L -s "${RELEASES_URL}" | grep "rate limit" > /dev/null; then
+			if curl --http1.1 -L -s --connect-timeout 5 -m 15 "${RELEASES_URL}" | grep "rate limit" > /dev/null; then
 				echo "GitHub API rate limit exceeded"
 				exit 29
 			fi
@@ -555,7 +555,7 @@ main() {
 		FILE_NAME=$(basename ${IMG_URL})
 		NAME=$(echo "${FILE_NAME}" | cut -f 1 -d '.')
 		BASE_URL=$(dirname "${IMG_URL}")
-		CHECKSUM=$(curl --http1.1 -L -s "${BASE_URL}/sha256sum.txt" | cut -f -1 -d ' ')
+		CHECKSUM=$(curl --http1.1 -L -s --connect-timeout 5 -m 15 "${BASE_URL}/sha256sum.txt" | cut -f -1 -d ' ')
 		SUBVOL="${DEPLOY_PATH}/${NAME}"
 		IMG_FILE="${MOUNT_PATH}/${FILE_NAME}"
 
@@ -584,13 +584,13 @@ main() {
 		fi
 
 		if [ $FRZR_STEAM_PROGRESS -eq 1 ]; then
-			curl --http1.1 -# -L -o "${IMG_FILE}" -C - "${IMG_URL}" 2>&1 | \
+			curl --connect-timeout 10 --http1.1 -# -L -o "${IMG_FILE}" -C - "${IMG_URL}" 2>&1 | \
 			stdbuf -oL tr '\r' '\n' | grep --line-buffered -oP '[0-9]*+(?=.[0-9])' | clean_progress 91 %
 		elif [ -z ${SHOW_UI} ]; then
 			echo "downloading ${NAME}..."
-			curl --http1.1 -L -o "${IMG_FILE}" -C - "${IMG_URL}"
+			curl --connect-timeout 10 --http1.1 -L -o "${IMG_FILE}" -C - "${IMG_URL}"
 		else
-			curl --http1.1 -# -L -o "${IMG_FILE}" -C - "${IMG_URL}" 2>&1 | \
+			curl --connect-timeout 10 --http1.1 -# -L -o "${IMG_FILE}" -C - "${IMG_URL}" 2>&1 | \
 			stdbuf -oL tr '\r' '\n' | grep --line-buffered -oP '[0-9]*+(?=.[0-9])' | clean_progress 100 | \
 			whiptail --gauge "下载系统镜像 (${NAME})" 10 50 0
 		fi
