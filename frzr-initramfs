@@ -72,8 +72,18 @@ if [ -d /frzr_root ]; then
         BUILDID=$(grep '^BUILD_ID=' /etc/os-release | awk -F= '{ print $2 }' | sed 's/"//g')
     fi
 
+    # 如果 BUILDID 包含_ 则只取最后一个_之后的部分
+    if [[ $BUILDID == *"_"* ]]; then
+        BUILDID=$(echo $BUILDID | awk -F_ '{print $NF}')
+    fi
+
     BUILD="$ID"-"$VERSIONID"_"$BUILDID"
     DEPLOYMENT_PATH="/frzr_root/deployments/$BUILD"
+
+    if [[ ! -d $DEPLOYMENT_PATH ]]; then
+        echo "No deployment found for $BUILD"
+        exit 1
+    fi
 
     # Get locked state
     RELOCK=0
