@@ -576,10 +576,10 @@ main() {
 		fi
 
 		if [ $FRZR_CHECK_UPDATE -eq 1 ]; then
-			echo "Update available: ${NAME}"
 			if [[ -n $FALLBACK_URL ]]; then
-				echo " (with fallback)"
+				fallback_msg="(with_fallback)"
 			fi
+			echo "${NAME}　${fallback_msg}"
 			exit 0 # let Steam know there is an update available
 		fi
 
