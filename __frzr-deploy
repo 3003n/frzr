@@ -373,7 +373,7 @@ get_random_value() {
     echo "${array[$random_index]}"
 }
 
-get_fallback_url() {
+get_fallback_url_justlist() {
 	local base_url=$1
 	local img_file_name=$2
 
@@ -397,6 +397,18 @@ get_fallback_url() {
 		fi
   	fi
 	echo "$fallback_url"
+}
+
+get_fallback_url_alist() {
+	local img_file_name=$1
+
+	fallback_base="https://ns.switchsystem.eu.org/d/guest/stos/img/"
+	image_url="${fallback_base}${img_file_name}"
+
+	# 使用 curl 获取链接的状态码是否是 302，如果是 302，说明链接有效，echo 出来
+	if curl --http1.1 -s -o /dev/null -w "%{http_code}" "$image_url" | grep -q "302"; then
+		echo "$image_url"
+	fi
 }
 
 
@@ -559,10 +571,21 @@ main() {
 		SUBVOL="${DEPLOY_PATH}/${NAME}"
 		IMG_FILE="${MOUNT_PATH}/${FILE_NAME}"
 
-		FALLBACK_URL=$(get_fallback_url "${BASE_URL}" "${FILE_NAME}")
+
+		if [[ "$enable_fallback_url" == "true" ]]; then
+			FALLBACK_URL_AL=$(get_fallback_url_alist "${FILE_NAME}")
+			if [[ -n "$FALLBACK_URL_AL" ]]; then
+				FALLBACK_URL="${FALLBACK_URL_AL}"
+			else
+				FALLBACK_URL_JL=$(get_fallback_url_justlist "${BASE_URL}" "${FILE_NAME}")
+				if [[ -n "$FALLBACK_URL_JL" ]]; then
+					FALLBACK_URL="${FALLBACK_URL_JL}"
+				fi
+			fi
+		fi
 
 		# if the fallback url is not empty, set the img_url to the fallback url
-		if [[ ! -z "$FALLBACK_URL" && "$enable_fallback_url" == "true" ]]; then
+		if [[ -n "$FALLBACK_URL" ]]; then
 			if [[ ! $FRZR_CHECK_UPDATE -eq 1 ]]; then
 				echo "Fallback URL: ${FALLBACK_URL}"
 			fi
@@ -576,8 +599,14 @@ main() {
 		fi
 
 		if [ $FRZR_CHECK_UPDATE -eq 1 ]; then
-			if [[ -n $FALLBACK_URL ]]; then
-				fallback_msg="(with_fallback)"
+			# if [[ -n "$FALLBACK_URL" ]]; then
+			# 	fallback_msg="(with_fallback)"
+			# fi
+			if [[ -n "$FALLBACK_URL_AL" ]]; then
+				fallback_msg="(with_al)"
+			fi
+			if [[ -n "$FALLBACK_URL_JL" ]]; then
+				fallback_msg="(with_jl)"
 			fi
 			echo "${NAME}　${fallback_msg}"
 			exit 0 # let Steam know there is an update available
