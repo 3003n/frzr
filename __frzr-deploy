@@ -603,10 +603,10 @@ main() {
 			# 	fallback_msg="(with_fallback)"
 			# fi
 			if [[ -n "$FALLBACK_URL_AL" ]]; then
-				fallback_msg="(with_al)"
+				fallback_msg="(alist)"
 			fi
 			if [[ -n "$FALLBACK_URL_JL" ]]; then
-				fallback_msg="(with_jl)"
+				fallback_msg="(jlist)"
 			fi
 			echo "${NAME}　${fallback_msg}"
 			exit 0 # let Steam know there is an update available
