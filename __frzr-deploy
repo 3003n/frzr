@@ -644,7 +644,8 @@ main() {
 
 		CHECKSUM2=`sha256sum "${IMG_FILE}" | cut -d' ' -f 1`
 		if [ "$CHECKSUM" != "$CHECKSUM2" ]; then
-			rm -f "${IMG_FILE}"
+			# rm -f "${IMG_FILE}"
+			rm -f *.img.*
 			echo "checksum does not match; aborting"
 			exit 1
 		fi
