@@ -616,14 +616,17 @@ main() {
 			IMG_PATH=
 			if [ $FRZR_STEAM_PROGRESS -eq 1 ]; then
 				aria2c --connect-timeout=10 --file-allocation=none -x 16 -s 16 \
+				--checksum=sha-256="${CHECKSUM}" \
 				--console-log-level=warn --stderr=true -o "${FILE_NAME}" -d "${MOUNT_PATH}" "${IMG_URL}" 2>&1 | \
 				grep --line-buffered -oP '\d+(?=%)' | clean_progress 91 %
 			elif [ -z ${SHOW_UI} ]; then
 				echo "downloading ${NAME}..."
 				aria2c --connect-timeout=10 --file-allocation=none -x 16 -s 16 \
+				--checksum=sha-256="${CHECKSUM}" \
 				--console-log-level=warn -o "${FILE_NAME}" -d "${MOUNT_PATH}" "${IMG_URL}"
 			else
 				aria2c --connect-timeout=10 --file-allocation=none -x 16 -s 16 \
+				--checksum=sha-256="${CHECKSUM}" \
 				--console-log-level=warn --stderr=true -o "${FILE_NAME}" -d "${MOUNT_PATH}" "${IMG_URL}" 2>&1 | \
 				grep --line-buffered -oP '\d+(?=%)' | clean_progress 100 | \
 				whiptail --gauge "下载系统镜像 (${NAME})" 10 50 0
