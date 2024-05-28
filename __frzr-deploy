@@ -629,7 +629,7 @@ main() {
 				--checksum=sha-256="${CHECKSUM}" --auto-file-renaming=false \
 				--console-log-level=warn --stderr=true -o "${FILE_NAME}" -d "${MOUNT_PATH}" "${IMG_URL}" 2>&1 | \
 				grep --line-buffered -oP '\d+(?=%)' | clean_progress 100 | \
-				whiptail --gauge "下载系统镜像 (${NAME})" 10 50 0
+				whiptail --gauge "下载系统镜像 (${NAME}) " 10 50 0
 			fi
 		else
 			if [ $FRZR_STEAM_PROGRESS -eq 1 ]; then
