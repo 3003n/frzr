@@ -12,20 +12,23 @@ if grep -q "microcode" "/etc/mkinitcpio.conf"; then
     microcode_flag="# "
 fi
 
-# Check if script is being ran frmo the install media
-if [ -d /tmp/frzr_root ]; then
+function initramfs_subvol() {
+    local subvol=$1
+    if [ -z "$subvol" ]; then
+        echo "No subvol found" >&2
+        exit 1
+    fi
 
-    if [ -d "${SUBVOL}" ]; then
+    cd $subvol
+    # Mount necessary file systems
+    mount -t proc /proc proc/
+    mount -t sysfs /sys sys/
+    mount --rbind /dev dev/
 
-        cd ${SUBVOL}
-        # Mount necessary file systems
-        mount -t proc /proc proc/
-        mount -t sysfs /sys sys/
-        mount --rbind /dev dev/
+    # Set R/W permissions
+    btrfs property set -fts ${SUBVOL} ro false
 
-        # Set R/W permissions
-        btrfs property set -fts ${SUBVOL} ro false
-        chroot ${SUBVOL} /bin/bash <<EOF
+    chroot ${SUBVOL} /bin/bash <<EOF
 # Commands to be ran in chroot
 
 ### Create distro mkinitcpio preset
@@ -42,13 +45,50 @@ default_image="/boot/initramfs-linux.img"
 ### Rebuild Initramfs with custom preset
 mkinitcpio -p \${NAME%%-*}
 EOF
-        # Set back to R/O permissions
-        btrfs property set -fts ${SUBVOL} ro true
-        # unmount filesystems
-        umount -l ${SUBVOL}/proc
-        umount -l ${SUBVOL}/sys
-        mount --make-rslave ${SUBVOL}/dev
-        umount -l ${SUBVOL}/dev
+    # Set back to R/O permissions
+    btrfs property set -fts ${SUBVOL} ro true
+    # unmount filesystems
+    umount -l ${SUBVOL}/proc
+    umount -l ${SUBVOL}/sys
+    mount --make-rslave ${SUBVOL}/dev
+    umount -l ${SUBVOL}/dev
+
+}
+
+function initramfs_boot() {
+    local path=$1
+    if [ -z "$ID" ]; then
+        echo "No ID found" >&2
+        exit 1
+    fi
+    if [ -z "$BUILD" ]; then
+        echo "No BUILD found" >&2
+        exit 1
+    fi
+    if [ -z path ]; then
+        echo "No path found" >&2
+        exit 1
+    fi
+
+    cat > "/etc/mkinitcpio.d/${ID}.preset" <<EOF
+ALL_config="/etc/mkinitcpio.conf"
+ALL_kver="$path/$BUILD/vmlinuz-linux"
+${microcode_flag}ALL_microcode=($path/$BUILD/*-ucode.img)
+
+PRESETS="default"
+
+default_image="$path/initramfs-linux.img"
+EOF
+    # If we are not doing a deployment then this will be used for local installs to rebuild initramfs
+    mkinitcpio -p $ID
+}
+
+# Check if script is being ran frmo the install media
+if [ -d /tmp/frzr_root ]; then
+
+    if [ -d "${SUBVOL}" ]; then
+
+        initramfs_subvol "${SUBVOL}"
     else
         echo "No deployment directory found"
         exit 1
@@ -100,57 +140,11 @@ if [ -d /frzr_root ]; then
     ### Rebuild Initramfs with custom preset
 
     if [ -n "$SUBVOL" ]; then
-        cd ${SUBVOL}
-        # Mount necessary file systems
-        mount -t proc /proc proc/
-        mount -t sysfs /sys sys/
-        mount --rbind /dev dev/
-
-        # We have to chroot for new images or else the kernel version can cause initramfs building to fail
-        chroot ${SUBVOL} /bin/bash <<EOF
-# Commands to be ran in chroot
-### Create distro mkinitcpio preset
-echo '
-ALL_config="/etc/mkinitcpio.conf"
-ALL_kver="/boot/vmlinuz-linux"
-${microcode_flag}ALL_microcode=(/boot/*-ucode.img)
-
-PRESETS="default"
-
-default_image="/boot/initramfs-linux.img"
-' > /etc/mkinitcpio.d/\${NAME%%-*}.preset
-
-### Rebuild Initramfs with custom preset
-mkinitcpio -p \${NAME%%-*}
-EOF
-        umount -l ${SUBVOL}/proc
-        umount -l ${SUBVOL}/sys
-        mount --make-rslave ${SUBVOL}/dev
-        umount -l ${SUBVOL}/dev
-    elif [[ -d "/efi/${BUILD}" ]] || grep -q "HOOKS=.*systemd" /etc/mkinitcpio.conf; then
-        echo '
-ALL_config="/etc/mkinitcpio.conf"
-ALL_kver="/efi/'$BUILD'/vmlinuz-linux"
-'${microcode_flag}'ALL_microcode=(/efi/'$BUILD'/*-ucode.img)
-
-PRESETS="default"
-
-default_image="/efi/initramfs-linux.img"
-' >/etc/mkinitcpio.d/$ID.preset
-        # If we are not doing a deployment then this will be used for local installs to rebuild initramfs
-        mkinitcpio -p $ID
+        initramfs_subvol "${SUBVOL}"
+    elif [[ -d "/efi/${BUILD}" ]] && grep -q "HOOKS=.*systemd" /etc/mkinitcpio.conf; then
+        initramfs_boot "/efi"
     else
-        echo '
-ALL_config="/etc/mkinitcpio.conf"
-ALL_kver="/boot/'$BUILD'/vmlinuz-linux"
-'${microcode_flag}'ALL_microcode=(/boot/'$BUILD'/*-ucode.img)
-
-PRESETS="default"
-
-default_image="/boot/'$BUILD'/initramfs-linux.img"
-' >/etc/mkinitcpio.d/$ID.preset
-        # If we are not doing a deployment then this will be used for local installs to rebuild initramfs
-        mkinitcpio -p $ID
+        initramfs_boot "/frzr_root/boot"
     fi
 
     if [[ $RELOCK == 1 ]]; then
@@ -164,6 +158,11 @@ default_image="/boot/'$BUILD'/initramfs-linux.img"
         if [[ -d /efi/$BUILD ]]; then
             cp /efi/$BUILD/* /efi
             cp /efi/$BUILD/* /boot
+        fi
+
+        if [[ -d /frzr_root/boot/$BUILD ]]; then
+            cp /frzr_root/boot/$BUILD/* /frzr_root/boot
+            cp /frzr_root/boot/$BUILD/* /boot
         fi
     fi
 fi
