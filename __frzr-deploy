@@ -284,7 +284,17 @@ get_deployment_to_delete() {
 
 	local TO_BOOT=`get_next_boot_deployment ${current_version} ${boot_cfg_path}`
 
-	ls -1 ${deployment_path} | grep -v ${current_version} | grep -v ${TO_BOOT} | head -1 || echo
+	ls -1 ${deployment_path} | grep -v ${current_version} | grep -v ${TO_BOOT} || echo
+}
+
+get_boot_to_delete() {
+	local current_version=${1}
+	local boot_cfg_path=${2}
+	local boot_path=${3}
+
+	local TO_BOOT=`get_next_boot_deployment ${current_version} ${boot_cfg_path}`
+
+	ls -1 ${boot_path} | grep -v ${current_version} | grep -v ${TO_BOOT} || echo
 }
 
 get_next_boot_deployment() {
@@ -481,13 +491,25 @@ main() {
 	# - the deployment is not currently running
 	# - the deployment is not configured to be run on next boot
 	if frzr-release > /dev/null; then
-		CURRENT=`frzr-release`
+		CURRENT="$(frzr-release)"
 		TO_DELETE=`get_deployment_to_delete ${CURRENT} ${BOOT_CFG} ${DEPLOY_PATH}`
 
+		TO_DELETE_BOOT=`get_boot_to_delete ${CURRENT} ${BOOT_CFG} ${MOUNT_PATH}/boot`
+
 		if [ ! -z ${TO_DELETE} ]; then
-			echo "deleting ${TO_DELETE}..."
-			btrfs subvolume delete ${DEPLOY_PATH}/${TO_DELETE} || true
-			rm -rf ${MOUNT_PATH}/boot/${TO_DELETE}
+			for deployment in ${TO_DELETE}; do
+				echo "deleting ${deployment}..."
+				rm -rf ${MOUNT_PATH}/boot/${deployment} || true
+				btrfs subvolume delete ${DEPLOY_PATH}/${deployment} || true
+			done
+		fi
+
+		if [ ! -z ${TO_DELETE_BOOT} ]; then
+			# if multiple boot entries are found, delete all of them
+			for boot_entry in ${TO_DELETE_BOOT}; do
+				echo "deleting boot entry ${boot_entry}..."
+				rm -rf ${MOUNT_PATH}/boot/${boot_entry} || true
+			done
 		fi
 	fi
 
