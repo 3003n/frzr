@@ -294,7 +294,7 @@ get_boot_to_delete() {
 
 	local TO_BOOT=`get_next_boot_deployment ${current_version} ${boot_cfg_path}`
 
-	ls -1 ${boot_path} | grep -v ${current_version} | grep -v ${TO_BOOT} || echo
+	ls -1 ${boot_path} | grep 'chimeraos-*_*' | grep -v ${current_version} | grep -v ${TO_BOOT} || echo
 }
 
 get_next_boot_deployment() {
@@ -496,7 +496,7 @@ main() {
 
 		TO_DELETE_BOOT=`get_boot_to_delete ${CURRENT} ${BOOT_CFG} ${MOUNT_PATH}/boot`
 
-		if [ ! -z ${TO_DELETE} ]; then
+		if [ -n "${TO_DELETE}" ]; then
 			for deployment in ${TO_DELETE}; do
 				echo "deleting ${deployment}..."
 				rm -rf ${MOUNT_PATH}/boot/${deployment} || true
@@ -504,7 +504,7 @@ main() {
 			done
 		fi
 
-		if [ ! -z ${TO_DELETE_BOOT} ]; then
+		if [ -n "${TO_DELETE_BOOT}" ]; then
 			# if multiple boot entries are found, delete all of them
 			for boot_entry in ${TO_DELETE_BOOT}; do
 				echo "deleting boot entry ${boot_entry}..."
