@@ -228,6 +228,14 @@ create_nix() {
 
 get_fbcon() {
 
+	if [[ -x $(command -v parse-edid) && -f "/etc/sk-chos/screen-rotate" ]]; then
+		source /etc/sk-chos/screen-rotate
+		if [[ -n "$FBCON_PARA" ]]; then
+        	echo "fbcon=$FBCON_PARA"
+			return 0
+		fi
+    fi
+
 	# Device specific configs
 	DEVICENAME=$(cat /sys/devices/virtual/dmi/id/product_name)
 
