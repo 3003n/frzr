@@ -9,6 +9,7 @@ fi
 
 get_img_url() {
 	CHANNEL=$1
+	local keywords="img"
 
 	# Order by creation date in reverse
 	result=$(jq 'sort_by(.created_at) | reverse')
@@ -27,7 +28,7 @@ get_img_url() {
 			select(.prerelease==false) ] |
 			first |
 			.assets[] |
-			select(.browser_download_url | test("img")) |
+			select(.browser_download_url | test("'$keywords'")) |
 			.browser_download_url'
 		)
 	else
@@ -36,7 +37,6 @@ get_img_url() {
 		stable_release_date="1970-01-01T00:00:00Z"
 		stable_download_url=""
 	fi
-
 
 	# Filter channels by release naming conventions
 	if [[ "$CHANNEL" =~ ^[0-9]+\-?[0-9]*$ ]] ; then
@@ -47,7 +47,7 @@ get_img_url() {
 					select(.name|test(\" ${CHANNEL}\$\")) ] |
 					first |
 					.assets[] |
-					select(.browser_download_url | test(\"img\")) |
+					select(.browser_download_url | test(\"${keywords}\")) |
 					.browser_download_url"
 				)
 	elif [ "$CHANNEL" == "stable" ]; then
@@ -65,9 +65,10 @@ get_img_url() {
 						select(.name|test("\\[.*\\]")|not) ] |
 						first |
 						.assets[] |
-						select(.browser_download_url | test("img")) |
+						select(.browser_download_url | test("'$keywords'")) |
 						.browser_download_url'
 					)
+
 			if [ $(date -d $testing_release_date +%s) -le $(date -d $stable_release_date +%s) ]; then
 				result=$stable_download_url
 			else
@@ -77,7 +78,6 @@ get_img_url() {
 			result=$stable_download_url
 		fi
 	else
-
 		# 如果 CHANNEL 以 -任意字符结尾
 		if [[ "$CHANNEL" =~ -[^-]*$ ]]; then
 			# CHANNEL 去掉最后一个 - 及其后面的内容
@@ -92,7 +92,7 @@ get_img_url() {
 					select(.name|test(\"\\\[${CHANNEL_STABLE}\\\]\" ; \"i\")) ] |
 					first |
 					.assets[] |
-					select(.browser_download_url | test(\"img\")) |
+					select(.browser_download_url | test(\"$keywords\")) |
 					.browser_download_url"
 				)
 			fi
@@ -112,7 +112,7 @@ get_img_url() {
 						select(.name|test(\"\\\[${CHANNEL}\\\]\" ; \"i\")) ] |
 						first |
 						.assets[] |
-						select(.browser_download_url | test(\"img\")) |
+						select(.browser_download_url | test(\"$keywords\")) |
 						.browser_download_url"
 					)
 			
@@ -321,8 +321,9 @@ clean_progress() {
 	local scale=$1
 	local postfix=$2
 	local last_value=$scale
+	local start_value=${3:-0}
 	while IFS= read -r line || [[ -n $line ]]; do
-		value=$(( ${line}*${scale}/100 ))
+		value=$(( ${line}*${scale}/100 + ${start_value} ))
 		if [ "$last_value" != "$value" ]; then
 			echo ${value}${postfix}
 			last_value=$value
@@ -568,24 +569,43 @@ main() {
 			fi
 		fi
 
-		RELEASES=$(curl --http1.1 -L -s --connect-timeout 5 -m 15 "${RELEASES_URL}")
+		set +e
+		RELEASES=$(curl --http1.1 -L -s --connect-timeout 10 -m 15 "${RELEASES_URL}")
+		status=$?
+		set -e
+		case $status in
+			28)
+				echo "Failed to fetch releases: Connection timed out"
+				exit $status
+				;;
+			35)
+				echo "Failed to fetch releases: SSL connect error"
+				exit $status
+				;;
+			0)
+				;;
+			*)
+				echo "Failed to fetch releases, status code: $status"
+				exit $status
+				;;
+		esac
 
 		if echo "$RELEASES" | grep -q "API rate limit"; then
 			echo "GitHub API rate limit exceeded"
 			exit 29
 		fi
 
-		IMG_URL=$(echo $RELEASES | get_img_url "${CHANNEL}")
+		IMG_LIST_URL=$(echo $RELEASES | get_img_url "${CHANNEL}")
 		if [ -f "${GITHUB_CDN_FILE}" ]; then
 			img_cdns=($(get_conf_value "${GITHUB_CDN_FILE}" "release" "server"))
 			if [[ -n "${img_cdns}" && "$enable_release_cdn" == "true" ]]; then
 				IMG_CND=$(get_random_value "${img_cdns[@]}")
 				echo "# Release: ${IMG_CND} #"
-				IMG_URL=$(echo "${IMG_URL}" | sed "s#^https://.*/${REPO}#${IMG_CND}/${REPO}#")
+				IMG_LIST_URL=$(echo "${IMG_LIST_URL}" | sed "s#^https://.*/${REPO}#${IMG_CND}/${REPO}#")
 			fi
 		fi
 
-		if [ -z "$IMG_URL" ] || [ "$IMG_URL" == "null" ]; then
+		if [ -z "$IMG_LIST_URL" ] || [[ "$IMG_LIST_URL" =~ "null" ]]; then
 			echo "No matching source found"
 			if curl --http1.1 -L -s --connect-timeout 5 -m 15 "${RELEASES_URL}" | grep "rate limit" > /dev/null; then
 				echo "GitHub API rate limit exceeded"
@@ -594,100 +614,133 @@ main() {
 			exit 1
 		fi
 
-		FILE_NAME=$(basename ${IMG_URL})
-		NAME=$(echo "${FILE_NAME}" | cut -f 1 -d '.')
-		BASE_URL=$(dirname "${IMG_URL}")
-		CHECKSUM=$(curl --http1.1 -L -s --connect-timeout 5 -m 15 "${BASE_URL}/sha256sum.txt" | cut -f -1 -d ' ')
+		BASE_URL=$(dirname $(echo "${IMG_LIST_URL}" | cut -d' ' -f1))
+		IMG_LIST_STR="$(curl --http1.1 -L -s --connect-timeout 5 -m 15 ${BASE_URL}/sha256sum.txt)"
+
+		echo "$IMG_LIST_STR"
+		CHECKSUM_LIST=$(echo "$IMG_LIST_STR" | awk '{print $1}')
+
+		IMG_FILE_NAME=$(basename ${IMG_LIST_URL} | sed 's/-[0-9]*$//')
+		NAME=$(echo "${IMG_FILE_NAME}" | cut -f 1 -d '.')
 		SUBVOL="${DEPLOY_PATH}/${NAME}"
-		IMG_FILE="${MOUNT_PATH}/${FILE_NAME}"
+		IMG_FILE="${MOUNT_PATH}/${IMG_FILE_NAME}"
 
+		SER=0
+		TOTAL=$(echo "$CHECKSUM_LIST" | wc -l)
 
-		if [[ "$enable_fallback_url" == "true" ]]; then
-			FALLBACK_URL_AL=$(get_fallback_url_alist "${FILE_NAME}")
-			if [[ -n "$FALLBACK_URL_AL" ]]; then
-				FALLBACK_URL="${FALLBACK_URL_AL}"
-			else
-				FALLBACK_URL_JL=$(get_fallback_url_justlist "${BASE_URL}" "${FILE_NAME}")
-				if [[ -n "$FALLBACK_URL_JL" ]]; then
-					FALLBACK_URL="${FALLBACK_URL_JL}"
+		for CHECKSUM in $CHECKSUM_LIST; do
+
+			FILE_NAME=$(echo "$IMG_LIST_STR" | grep $CHECKSUM | awk '{print $2}')
+			SUB_IMG_FILE="${MOUNT_PATH}/${FILE_NAME}"
+			SUB_IMG_URL="${BASE_URL}/${FILE_NAME}"
+
+			if [[ "$enable_fallback_url" == "true" ]]; then
+				FALLBACK_URL_AL=$(get_fallback_url_alist "${FILE_NAME}")
+				if [[ -n "$FALLBACK_URL_AL" ]]; then
+					FALLBACK_URL="${FALLBACK_URL_AL}"
+				else
+					FALLBACK_URL_JL=$(get_fallback_url_justlist "${BASE_URL}" "${FILE_NAME}")
+					if [[ -n "$FALLBACK_URL_JL" ]]; then
+						FALLBACK_URL="${FALLBACK_URL_JL}"
+					fi
 				fi
 			fi
-		fi
-
-		# if the fallback url is not empty, set the img_url to the fallback url
-		if [[ -n "$FALLBACK_URL" ]]; then
-			if [[ ! $FRZR_CHECK_UPDATE -eq 1 ]]; then
-				echo "Fallback URL: ${FALLBACK_URL}"
+	
+			# if the fallback url is not empty, set the img_url to the fallback url
+			if [[ -n "$FALLBACK_URL" ]]; then
+				if [[ ! $FRZR_CHECK_UPDATE -eq 1 ]]; then
+					echo "Fallback URL: ${FALLBACK_URL}"
+				fi
+				SUB_IMG_URL="${FALLBACK_URL}"
 			fi
-			IMG_URL="${FALLBACK_URL}"
-		fi
-
-
-		if [ -e ${SUBVOL} ]; then
-			echo "${NAME} already installed; aborting"
-			exit 7 # let Steam know there is no update available
-		fi
-
-		if [ $FRZR_CHECK_UPDATE -eq 1 ]; then
-			# if [[ -n "$FALLBACK_URL" ]]; then
-			# 	fallback_msg="(with_fallback)"
-			# fi
-			if [[ -n "$FALLBACK_URL_AL" ]]; then
-				fallback_msg="(alist)"
+	
+	
+			if [ -e ${SUBVOL} ]; then
+				echo "${NAME} already installed; aborting"
+				exit 7 # let Steam know there is no update available
 			fi
-			if [[ -n "$FALLBACK_URL_JL" ]]; then
-				fallback_msg="(jlist)"
+	
+			if [ $FRZR_CHECK_UPDATE -eq 1 ]; then
+				# if [[ -n "$FALLBACK_URL" ]]; then
+				# 	fallback_msg="(with_fallback)"
+				# fi
+				if [[ -n "$FALLBACK_URL_AL" ]]; then
+					fallback_msg="(alist)"
+				fi
+				if [[ -n "$FALLBACK_URL_JL" ]]; then
+					fallback_msg="(jlist)"
+				fi
+				echo "${NAME}　${fallback_msg}"
+				exit 0 # let Steam know there is an update available
 			fi
-			echo "${NAME}　${fallback_msg}"
-			exit 0 # let Steam know there is an update available
-		fi
 
-		if [[ -x "$(command -v aria2c)" ]];then
-			IMG_PATH=
-			if [ $FRZR_STEAM_PROGRESS -eq 1 ]; then
-				aria2c --connect-timeout=10 --file-allocation=none -x 16 -s 16 \
-				--checksum=sha-256="${CHECKSUM}" --auto-file-renaming=false --allow-overwrite=true \
-				--console-log-level=warn --stderr=true -o "${FILE_NAME}" -d "${MOUNT_PATH}" "${IMG_URL}" 2>&1 | \
-				grep --line-buffered -oP '\d+(?=%)' | clean_progress 91 %
-			elif [ -z ${SHOW_UI} ]; then
-				echo "downloading ${NAME}..."
-				aria2c --connect-timeout=10 --file-allocation=none -x 16 -s 16 \
-				--checksum=sha-256="${CHECKSUM}" --auto-file-renaming=false --allow-overwrite=true \
-				--console-log-level=warn -o "${FILE_NAME}" -d "${MOUNT_PATH}" "${IMG_URL}"
+			echo "Downloading ${NAME} ($((SER + 1))/${TOTAL})..."
+	
+			if [[ -x "$(command -v aria2c)" ]];then
+				if [ $FRZR_STEAM_PROGRESS -eq 1 ]; then
+					max_progress=91
+					start_progress=$((SER * max_progress / TOTAL))
+					aria2c --connect-timeout=10 --file-allocation=none -x 16 -s 16 \
+					--checksum=sha-256="${CHECKSUM}" --auto-file-renaming=false --allow-overwrite=true \
+					--console-log-level=warn --stderr=true -o "${FILE_NAME}" -d "${MOUNT_PATH}" "${SUB_IMG_URL}" 2>&1 | \
+					grep --line-buffered -oP '\d+(?=%)' | clean_progress $max_progress % $start_progress
+				elif [ -z ${SHOW_UI} ]; then
+					echo "downloading ${FILE_NAME}..."
+					aria2c --connect-timeout=10 --file-allocation=none -x 16 -s 16 \
+					--checksum=sha-256="${CHECKSUM}" --auto-file-renaming=false --allow-overwrite=true \
+					--console-log-level=warn -o "${FILE_NAME}" -d "${MOUNT_PATH}" "${SUB_IMG_URL}"
+				else
+					max_progress=100
+					start_progress=$((SER * max_progress / TOTAL))
+					aria2c --connect-timeout=10 --file-allocation=none -x 16 -s 16 \
+					--checksum=sha-256="${CHECKSUM}" --auto-file-renaming=false --allow-overwrite=true \
+					--console-log-level=warn --stderr=true -o "${FILE_NAME}" -d "${MOUNT_PATH}" "${SUB_IMG_URL}" 2>&1 | \
+					grep --line-buffered -oP '\d+(?=%)' | clean_progress $max_progress '' $start_progress | \
+					whiptail --gauge "下载系统镜像 (${NAME}) " 10 50 0
+				fi
 			else
-				aria2c --connect-timeout=10 --file-allocation=none -x 16 -s 16 \
-				--checksum=sha-256="${CHECKSUM}" --auto-file-renaming=false --allow-overwrite=true \
-				--console-log-level=warn --stderr=true -o "${FILE_NAME}" -d "${MOUNT_PATH}" "${IMG_URL}" 2>&1 | \
-				grep --line-buffered -oP '\d+(?=%)' | clean_progress 100 | \
-				whiptail --gauge "下载系统镜像 (${NAME}) " 10 50 0
+				if [ $FRZR_STEAM_PROGRESS -eq 1 ]; then
+					max_progress=91
+					start_progress=$((SER * max_progress / TOTAL))
+					curl --connect-timeout 10 --http1.1 -# -L -o "${SUB_IMG_FILE}" -C - "${SUB_IMG_URL}" 2>&1 | \
+					stdbuf -oL tr '\r' '\n' | grep --line-buffered -oP '[0-9]*+(?=.[0-9])' | \
+					clean_progress $max_progress % $start_progress
+				elif [ -z ${SHOW_UI} ]; then
+					echo "downloading ${FILE_NAME}..."
+					curl --connect-timeout 10 --http1.1 -L -o "${SUB_IMG_FILE}" -C - "${SUB_IMG_URL}"
+				else
+					max_progress=100
+					start_progress=$((SER * max_progress / TOTAL))
+					curl --connect-timeout 10 --http1.1 -# -L -o "${SUB_IMG_FILE}" -C - "${SUB_IMG_URL}" 2>&1 | \
+					stdbuf -oL tr '\r' '\n' | grep --line-buffered -oP '[0-9]*+(?=.[0-9])' | \
+					clean_progress $max_progress '' $start_progress | \
+					whiptail --gauge "下载系统镜像 (${NAME})" 10 50 0
+				fi
 			fi
-		else
-			if [ $FRZR_STEAM_PROGRESS -eq 1 ]; then
-				curl --connect-timeout 10 --http1.1 -# -L -o "${IMG_FILE}" -C - "${IMG_URL}" 2>&1 | \
-				stdbuf -oL tr '\r' '\n' | grep --line-buffered -oP '[0-9]*+(?=.[0-9])' | clean_progress 91 %
-			elif [ -z ${SHOW_UI} ]; then
-				echo "downloading ${NAME}..."
-				curl --connect-timeout 10 --http1.1 -L -o "${IMG_FILE}" -C - "${IMG_URL}"
-			else
-				curl --connect-timeout 10 --http1.1 -# -L -o "${IMG_FILE}" -C - "${IMG_URL}" 2>&1 | \
-				stdbuf -oL tr '\r' '\n' | grep --line-buffered -oP '[0-9]*+(?=.[0-9])' | clean_progress 100 | \
-				whiptail --gauge "下载系统镜像 (${NAME})" 10 50 0
-			fi
-		fi
 
-		CHECKSUM2=`sha256sum "${IMG_FILE}" | cut -d' ' -f 1`
-		if [ "$CHECKSUM" != "$CHECKSUM2" ]; then
-			# rm -f "${IMG_FILE}"
-			rm -f *.img.*
-			echo "checksum does not match; aborting"
-			exit 1
-		fi
+			CHECKSUM_CALCULATED=`sha256sum "${SUB_IMG_FILE}" | cut -d' ' -f 1`
+			if [ "$CHECKSUM" != "$CHECKSUM_CALCULATED" ]; then
+				rm -f "${SUB_IMG_FILE}"
+				echo "checksum does not match; aborting"
+				exit 1
+			fi
+
+			SER=$((SER+1))
+		done
     fi
 
 	if [ -z ${SHOW_UI} ]; then
 		echo "installing ${NAME}..."
 	else
 		whiptail --infobox "提取并安装系统镜像 (${NAME}), 这可能需要一些时间。" 10 50
+	fi
+
+	# 对分割的文件进行合并
+	if [ -f "${IMG_FILE}-000" ]; then
+		echo "merging split files..."
+		cat ${IMG_FILE}-* > ${IMG_FILE}
+		rm -f ${IMG_FILE}-*
+		echo "split files merge complete"
 	fi
 
 	# if [[ "${IMG_FILE##*.}" == "img" ]]; then
