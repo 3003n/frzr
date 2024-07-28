@@ -565,7 +565,7 @@ main() {
 		REPO=$(echo "${SOURCE}" | cut -f 1 -d ':')
 		CHANNEL=$(echo "${SOURCE}" | cut -f 2 -d ':')
 
-		RELEASES_URL="https://api.github.com/repos/${REPO}/releases"
+		RELEASES_URL="https://api.github.com/repos/${REPO}/releases?per_page=100"
 
 		FRZR_SK_CONFIG="/etc/frzr-sk.conf"
 		if [ -f "${FRZR_SK_CONFIG}" ]; then

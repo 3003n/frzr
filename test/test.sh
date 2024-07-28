@@ -5,7 +5,7 @@ source ../__frzr-deploy
 set -e
 
 REPO="3003n/chimeraos"
-RELEASES_URL="https://api.github.com/repos/${REPO}/releases"
+RELEASES_URL="https://api.github.com/repos/${REPO}/releases?per_page=100"
 RELEASES=$(curl --http1.1 -L -s --connect-timeout 5 -m 15 "${RELEASES_URL}")
 
 CHANNEL="${1:-stable}"
