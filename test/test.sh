@@ -14,7 +14,7 @@ CHANNEL="${1:-stable}"
 IMG_LIST_URL=$(echo $RELEASES | get_img_url "${CHANNEL}")
 echo "IMG_LIST_URL: $IMG_LIST_URL"
 
-BASE_URL=$(dirname $(echo "${IMG_LIST_URL}" | cut -d' ' -f1))
+BASE_URL=$(dirname "$(echo \"${IMG_LIST_URL}\" | cut -d' ' -f1)")
 echo "BASE_URL: $BASE_URL"
 
 IMG_LIST_STR="$(curl --http1.1 -L -s --connect-timeout 5 -m 15 ${BASE_URL}/sha256sum.txt)"

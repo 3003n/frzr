@@ -11,11 +11,16 @@ get_img_url() {
 	CHANNEL=$1
 	local keywords="img"
 
+	echo "CHANNEL: $CHANNEL" >&2
+
 	# Order by creation date in reverse
 	result=$(jq 'sort_by(.created_at) | reverse')
 
 	# Remove entries which have not been completed uploading
 	result=$(echo "${result}" | jq 'del(.[] | select(.assets[].state != "uploaded"))')
+
+	# tt=$(echo "${result}" | jq -er '[ .[] ] | length')
+	# echo "tt: $tt" >&2
 
 	# Always check for stable date
 	if stable_release_date=$(echo "${result}" | jq -er '[ .[] |
@@ -82,42 +87,54 @@ get_img_url() {
 		if [[ "$CHANNEL" =~ -[^-]*$ ]]; then
 			# CHANNEL 去掉最后一个 - 及其后面的内容
 			CHANNEL_STABLE=$(echo "${CHANNEL}" | sed 's/-[^-]*$//')
-			result_stable=$(echo ${result} | jq "[ .[] | select(.name|test(\"\\\[${CHANNEL_STABLE}\\\]\" ; \"i\")) ]")
-			if stable_release_date=$(echo "${result_stable}" | jq -er "[ .[] |
-					select(.name|test(\"\\\[${CHANNEL_STABLE}\\\]\" ; \"i\")) ] |
+			echo "CHANNEL_STABLE: $CHANNEL_STABLE" >&2
+			result_stable=$(echo "${result}" | jq '[ .[] | select(.name|test("['${CHANNEL_STABLE}']" ; "i")) ]')
+
+			if stable_release_date=$(echo "${result_stable}" | jq -er '[ .[] |
+					select(.name|test("['${CHANNEL_STABLE}']" ; "i")) ] |
 					first |
-					.created_at"
+					.created_at'
 				); then
-				stable_download_url=$(echo "${result_stable}" | jq -r "[ .[] |
-					select(.name|test(\"\\\[${CHANNEL_STABLE}\\\]\" ; \"i\")) ] |
+				stable_download_url=$(echo "${result_stable}" | jq -r '[ .[] |
+					select(.name|test("['${CHANNEL_STABLE}']" ; "i")) ] |
 					first |
 					.assets[] |
-					select(.browser_download_url | test(\"$keywords\")) |
-					.browser_download_url"
+					select(.browser_download_url | test("'$keywords'")) |
+					.browser_download_url'
 				)
+			else
+				echo "No stable channel found, pick some (old) values" >&2
+				stable_release_date="1970-01-01T00:00:00Z"
+				stable_download_url=""
 			fi
 		fi
 
-
 		# Match any release with CHANNEL as a tag (including unstable)
-		result=$(echo ${result} | jq "[ .[] | select(.prerelease==true) | select(.name|test(\"\\\[${CHANNEL}\\\]\" ; \"i\")) ]")
-		if unstable_release_date=$(echo "${result}" | jq -er "[ .[] |
+		result=$(echo "${result}" | jq '[ .[] | select(.prerelease==true) | select(.name|test("['${CHANNEL}']" ; "i")) ]')
+		if unstable_release_date=$(echo "${result}" | jq -er '[ .[] |
 					select(.prerelease==true) |
-					select(.name|test(\"\\\[${CHANNEL}\\\]\" ; \"i\")) ] |
+					select(.name|test("['${CHANNEL}']" ; "i")) ] |
 					first |
-					.created_at"
+					.created_at'
 				); then
-			unstable_url=$(echo "${result}" | jq -r "[ .[] |
+			unstable_url=$(echo "${result}" | jq -r '[ .[] |
 						select(.prerelease==true) |
-						select(.name|test(\"\\\[${CHANNEL}\\\]\" ; \"i\")) ] |
+						select(.name|test("['${CHANNEL}']" ; "i")) ] |
 						first |
 						.assets[] |
-						select(.browser_download_url | test(\"$keywords\")) |
-						.browser_download_url"
+						select(.browser_download_url | test("'$keywords'")) |
+						.browser_download_url'
 					)
-			
+
+			echo "unstable_release_date: $unstable_release_date" >&2
+			echo "stable_release_date: $stable_release_date" >&2
+
 			unstable_release_time=$(date -d $unstable_release_date +%s)
 			stable_release_time=$(date -d $stable_release_date +%s)
+
+			echo "unstable_release_time: $unstable_release_time" >&2
+			echo "stable_release_time: $stable_release_time" >&2
+
 			# CHANNEL 为 unstable 或者 CHANNEL_STABLE 不为空, 并且 unstable_release_time 小于等于 stable_release_time
 			if [[ "$CHANNEL" == "unstable" || ! -z "$CHANNEL_STABLE" ]] && [ $unstable_release_time -le $stable_release_time ]; then
 				result=$stable_download_url
