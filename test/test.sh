@@ -14,7 +14,7 @@ CHANNEL="${1:-stable}"
 IMG_LIST_URL=$(echo $RELEASES | get_img_url "${CHANNEL}")
 echo "IMG_LIST_URL: $IMG_LIST_URL"
 
-BASE_URL=$(dirname "$(echo \"${IMG_LIST_URL}\" | cut -d' ' -f1)")
+BASE_URL=$(dirname "$(echo ${IMG_LIST_URL} | cut -d' ' -f1)")
 echo "BASE_URL: $BASE_URL"
 
 IMG_LIST_STR="$(curl --http1.1 -L -s --connect-timeout 5 -m 15 ${BASE_URL}/sha256sum.txt)"
@@ -44,6 +44,19 @@ echo "TOTAL: $TOTAL"
 for CHECKSUM in $CHECKSUM_LIST; do
     FILENAME=$(echo "$IMG_LIST_STR" | grep $CHECKSUM | awk '{print $2}')
     echo "Downloading $FILENAME , SER=$SER"
+
+    max_progress=91
+    every_progress=$((max_progress / TOTAL))
+    start_progress=$((SER * every_progress))
+    end_progress=$(((SER + 1) * every_progress))
+    scale=$((end_progress - start_progress))
+
+    echo "max_progress: $max_progress, start_progress $start_progress"
+
+    input="0\n25\n50\n75\n100"
+    # echo -e $input | clean_progress $scale "%" $start_progress
+
+    echo -e $input | clean_progress_loop $max_progress $SER $TOTAL "%"
 
     SER=$((SER+1))
 done

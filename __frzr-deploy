@@ -343,10 +343,42 @@ clean_progress() {
 	local scale=$1
 	local postfix=$2
 	local last_value=$scale
-	local start_value=${3:-0}
-	while IFS= read -r line || [[ -n $line ]]; do
-		value=$(( ${line}*${scale}/100 + ${start_value} ))
+	local offset_value=${3:-0}
+
+	while IFS= read -r line || [[ -n "$line" ]]; do
+		# 检查输入行是否为有效数字
+        if ! [[ "$line" =~ ^[0-9]+$ ]]; then
+            continue
+        fi
+		value=$(( ${line}*${scale}/100 ))
 		if [ "$last_value" != "$value" ]; then
+			value=$(( ${value} + ${offset_value} ))
+			echo ${value}${postfix}
+			last_value=$value
+		fi
+	done
+}
+
+clean_progress_loop() {
+	local max_progress=$1
+	local current_loop=$2
+	local loop_count=$3
+	local postfix=$4
+	local last_value=$max_progress
+
+	every_progress=$((max_progress / loop_count))
+    start_progress=$((SER * every_progress))
+    end_progress=$(((SER + 1) * every_progress))
+    scale=$((end_progress - start_progress))
+
+	while IFS= read -r line || [[ -n "$line" ]]; do
+		# 检查输入行是否为有效数字
+        if ! [[ "$line" =~ ^[0-9]+$ ]]; then
+            continue
+        fi
+		value=$(( ${line}*${scale}/100 ))
+		if [ "$last_value" != "$value" ]; then
+			value=$(( ${value} + ${start_progress} ))
 			echo ${value}${postfix}
 			last_value=$value
 		fi
@@ -701,11 +733,11 @@ main() {
 			if [[ -x "$(command -v aria2c)" ]];then
 				if [ $FRZR_STEAM_PROGRESS -eq 1 ]; then
 					max_progress=91
-					start_progress=$((SER * max_progress / TOTAL))
+
 					aria2c --connect-timeout=10 --file-allocation=none -x 16 -s 16 \
 					--checksum=sha-256="${CHECKSUM}" --auto-file-renaming=false --allow-overwrite=true \
 					--console-log-level=warn --stderr=true -o "${FILE_NAME}" -d "${MOUNT_PATH}" "${SUB_IMG_URL}" 2>&1 | \
-					grep --line-buffered -oP '\d+(?=%)' | clean_progress $max_progress % $start_progress
+					grep --line-buffered -oP '\d+(?=%)' | clean_progress_loop $max_progress $SER $TOTAL %
 				elif [ -z ${SHOW_UI} ]; then
 					echo "downloading ${FILE_NAME}..."
 					aria2c --connect-timeout=10 --file-allocation=none -x 16 -s 16 \
@@ -713,29 +745,29 @@ main() {
 					--console-log-level=warn -o "${FILE_NAME}" -d "${MOUNT_PATH}" "${SUB_IMG_URL}"
 				else
 					max_progress=100
-					start_progress=$((SER * max_progress / TOTAL))
+
 					aria2c --connect-timeout=10 --file-allocation=none -x 16 -s 16 \
 					--checksum=sha-256="${CHECKSUM}" --auto-file-renaming=false --allow-overwrite=true \
 					--console-log-level=warn --stderr=true -o "${FILE_NAME}" -d "${MOUNT_PATH}" "${SUB_IMG_URL}" 2>&1 | \
-					grep --line-buffered -oP '\d+(?=%)' | clean_progress $max_progress '' $start_progress | \
+					grep --line-buffered -oP '\d+(?=%)' | clean_progress_loop $max_progress $SER $TOTAL | \
 					whiptail --gauge "下载系统镜像 (${NAME}) " 10 50 0
 				fi
 			else
 				if [ $FRZR_STEAM_PROGRESS -eq 1 ]; then
 					max_progress=91
-					start_progress=$((SER * max_progress / TOTAL))
+
 					curl --connect-timeout 10 --http1.1 -# -L -o "${SUB_IMG_FILE}" -C - "${SUB_IMG_URL}" 2>&1 | \
 					stdbuf -oL tr '\r' '\n' | grep --line-buffered -oP '[0-9]*+(?=.[0-9])' | \
-					clean_progress $max_progress % $start_progress
+					clean_progress_loop $max_progress $SER $TOTAL %
 				elif [ -z ${SHOW_UI} ]; then
 					echo "downloading ${FILE_NAME}..."
 					curl --connect-timeout 10 --http1.1 -L -o "${SUB_IMG_FILE}" -C - "${SUB_IMG_URL}"
 				else
 					max_progress=100
-					start_progress=$((SER * max_progress / TOTAL))
+
 					curl --connect-timeout 10 --http1.1 -# -L -o "${SUB_IMG_FILE}" -C - "${SUB_IMG_URL}" 2>&1 | \
 					stdbuf -oL tr '\r' '\n' | grep --line-buffered -oP '[0-9]*+(?=.[0-9])' | \
-					clean_progress $max_progress '' $start_progress | \
+					clean_progress_loop $max_progress $SER $TOTAL | \
 					whiptail --gauge "下载系统镜像 (${NAME})" 10 50 0
 				fi
 			fi
