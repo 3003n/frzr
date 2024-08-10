@@ -484,6 +484,13 @@ get_fallback_url_alist() {
 	fi
 }
 
+get_env_from_conf() {
+	set -a
+	for i in "${HOME}"/.config/environment.d/*.conf; do
+    	[[ -f "${i}" ]] && . "${i}"
+	done
+	set +a
+}
 
 main() {
 	if [ $EUID -ne 0 ]; then
@@ -602,7 +609,7 @@ main() {
 		REPO=$(echo "${SOURCE}" | cut -f 1 -d ':')
 		CHANNEL=$(echo "${SOURCE}" | cut -f 2 -d ':')
 
-		RELEASES_URL="https://api.github.com/repos/${REPO}/releases?per_page=100"
+		RELEASES_API_URL="https://api.github.com/repos/${REPO}/releases?per_page=100"
 
 		FRZR_SK_CONFIG="/etc/frzr-sk.conf"
 		if [ -f "${FRZR_SK_CONFIG}" ]; then
@@ -619,12 +626,23 @@ main() {
 			if [[ -n "${api_cdns}" && "$enable_api_cdn" == "true" ]]; then
 				API_CND=$(get_random_value "${api_cdns[@]}")
 				echo "# API: ${API_CND} #"
-				RELEASES_URL="${API_CND}/repos/${REPO}/releases"
+				RELEASES_API_URL="${API_CND}/repos/${REPO}/releases"
 			fi
 		fi
 
+		# get environment variables from $HOME/.config/environment.d/*.conf
+		get_env_from_conf
+
+		if [[ -n "$GITHUB_TOKEN" ]]; then
+			# RELEASES_API_URL="${RELEASES_API_URL}?access_token=${GITHUB_TOKEN}"
+			# 脱敏处理 只显示前 8 位，后面用 * 代替
+			token_with_mask=$(echo "${GITHUB_TOKEN}" | sed 's/./\*/9g')
+			echo "Using GitHub token: ${token_with_mask}" >&2
+			HEADER="-H 'Authorization: token ${GITHUB_TOKEN}'"
+		fi
+
 		set +e
-		RELEASES=$(curl --http1.1 -L -s --connect-timeout 10 -m 15 "${RELEASES_URL}")
+		RELEASES=$(curl --http1.1 -L -s --connect-timeout 10 -m 15 $HEADER "${RELEASES_API_URL}")
 		status=$?
 		set -e
 		case $status in
@@ -661,7 +679,7 @@ main() {
 
 		if [ -z "$IMG_LIST_URL" ] || [[ "$IMG_LIST_URL" =~ "null" ]]; then
 			echo "No matching source found"
-			if curl --http1.1 -L -s --connect-timeout 5 -m 15 "${RELEASES_URL}" | grep "rate limit" > /dev/null; then
+			if curl --http1.1 -L -s --connect-timeout 5 -m 15 "${RELEASES_API_URL}" | grep "rate limit" > /dev/null; then
 				echo "GitHub API rate limit exceeded"
 				exit 29
 			fi

@@ -5,8 +5,17 @@ source ../__frzr-deploy
 set -e
 
 REPO="3003n/chimeraos"
-RELEASES_URL="https://api.github.com/repos/${REPO}/releases?per_page=100"
-RELEASES=$(curl --http1.1 -L -s --connect-timeout 5 -m 15 "${RELEASES_URL}")
+RELEASES_API_URL="https://api.github.com/repos/${REPO}/releases?per_page=100"
+
+if [[ -n "$GITHUB_TOKEN" ]]; then
+    # RELEASES_API_URL="${RELEASES_API_URL}?access_token=${GITHUB_TOKEN}"
+    # 脱敏处理 只显示前 8 位，后面用 * 代替
+    token_with_mask=$(echo "${GITHUB_TOKEN}" | sed 's/./\*/9g')
+    echo "Using GitHub token: ${token_with_mask}" >&2
+    HEADER="-H 'Authorization: token ${GITHUB_TOKEN}'"
+fi
+
+RELEASES=$(curl --http1.1 -L -s --connect-timeout 5 -m 15 $HEADER "${RELEASES_API_URL}")
 
 CHANNEL="${1:-stable}"
 
@@ -58,5 +67,5 @@ for CHECKSUM in $CHECKSUM_LIST; do
 
     echo -e $input | clean_progress_loop $max_progress $SER $TOTAL "%"
 
-    SER=$((SER+1))
+    SER=$((SER + 1))
 done
