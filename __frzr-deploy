@@ -23,13 +23,15 @@ get_img_url() {
 	# echo "tt: $tt" >&2
 
 	# Always check for stable date
-	if stable_release_date=$(echo "${result}" | jq -er '[ .[] |
+	if stable_release_date=$(
+		echo "${result}" | jq -er '[ .[] |
 			select(.prerelease==false) ] |
 			first |
 			.created_at'
-		); then
+	); then
 		# Check for stable url, this is the latest that have prerelease == false
-		stable_download_url=$(echo "${result}" | jq -r '[ .[] |
+		stable_download_url=$(
+			echo "${result}" | jq -r '[ .[] |
 			select(.prerelease==false) ] |
 			first |
 			.assets[] |
@@ -44,35 +46,38 @@ get_img_url() {
 	fi
 
 	# Filter channels by release naming conventions
-	if [[ "$CHANNEL" =~ ^[0-9]+\-?[0-9]*$ ]] ; then
+	if [[ "$CHANNEL" =~ ^[0-9]+\-?[0-9]*$ ]]; then
 		# Check first for explicit version numbers between stable releases
 		# Useful for downgrading
-		result=$(echo "${result}" | jq -r "[ .[] |
+		result=$(
+			echo "${result}" | jq -r "[ .[] |
 					select(.prerelease==false) |
 					select(.name|test(\" ${CHANNEL}\$\")) ] |
 					first |
 					.assets[] |
 					select(.browser_download_url | test(\"${keywords}\")) |
 					.browser_download_url"
-				)
+		)
 	elif [ "$CHANNEL" == "stable" ]; then
 		result=$stable_download_url
 	elif [ "$CHANNEL" == "testing" ]; then
 		# Testing channel have prerelease = true and no other tags
-		if testing_release_date=$(echo "${result}" | jq -er '[ .[] |
+		if testing_release_date=$(
+			echo "${result}" | jq -er '[ .[] |
 			select(.prerelease==true) |
 			select(.name|test("\\[.*\\]")|not) ] |
 			first |
 			.created_at'
-			); then
-			testing_url=$(echo "${result}" | jq -r '[ .[] |
+		); then
+			testing_url=$(
+				echo "${result}" | jq -r '[ .[] |
 						select(.prerelease==true) |
 						select(.name|test("\\[.*\\]")|not) ] |
 						first |
 						.assets[] |
 						select(.browser_download_url | test("'$keywords'")) |
 						.browser_download_url'
-					)
+			)
 
 			if [ $(date -d $testing_release_date +%s) -le $(date -d $stable_release_date +%s) ]; then
 				result=$stable_download_url
@@ -90,12 +95,14 @@ get_img_url() {
 			echo "CHANNEL_STABLE: $CHANNEL_STABLE" >&2
 			result_stable=$(echo "${result}" | jq '[ .[] | select(.name|test("\\['${CHANNEL_STABLE}'\\]" ; "i")) ]')
 
-			if stable_release_date=$(echo "${result_stable}" | jq -er '[ .[] |
+			if stable_release_date=$(
+				echo "${result_stable}" | jq -er '[ .[] |
 					select(.name|test("\\['${CHANNEL_STABLE}'\\]" ; "i")) ] |
 					first |
 					.created_at'
-				); then
-				stable_download_url=$(echo "${result_stable}" | jq -r '[ .[] |
+			); then
+				stable_download_url=$(
+					echo "${result_stable}" | jq -r '[ .[] |
 					select(.name|test("\\['${CHANNEL_STABLE}'\\]" ; "i")) ] |
 					first |
 					.assets[] |
@@ -114,20 +121,22 @@ get_img_url() {
 		# Match any release with CHANNEL as a tag (including unstable)
 		result=$(echo "${result}" | jq '[ .[] | select(.prerelease==true) | select(.name|test("\\['${CHANNEL}'\\]" ; "i")) ]')
 		# echo "result is $result" >&2
-		if unstable_release_date=$(echo "${result}" | jq -er '[ .[] |
+		if unstable_release_date=$(
+			echo "${result}" | jq -er '[ .[] |
 					select(.prerelease==true) |
 					select(.name|test("\\['${CHANNEL}'\\]" ; "i")) ] |
 					first |
 					.created_at'
-				); then
-			unstable_url=$(echo "${result}" | jq -r '[ .[] |
+		); then
+			unstable_url=$(
+				echo "${result}" | jq -r '[ .[] |
 						select(.prerelease==true) |
 						select(.name|test("\\['${CHANNEL}'\\]" ; "i")) ] |
 						first |
 						.assets[] |
 						select(.browser_download_url | test("'$keywords'")) |
 						.browser_download_url'
-					)
+			)
 
 			echo "unstable_release_date: $unstable_release_date" >&2
 			echo "stable_release_date: $stable_release_date" >&2
@@ -146,7 +155,7 @@ get_img_url() {
 			else
 				result=$unstable_url
 			fi
-			
+
 		else
 			result=$stable_download_url
 		fi
@@ -161,49 +170,49 @@ mk_swapfile() {
 
 	dd if=/dev/zero of="$SWAPFILE" bs=1M count="$SWAPSIZE"
 	chmod 600 "$SWAPFILE"
-	mkswap -U clear "$SWAPFILE" 
+	mkswap -U clear "$SWAPFILE"
 }
 
 create_swap() {
-    local mount_path=${1}
-    local deployment_dir=${2}
+	local mount_path=${1}
+	local deployment_dir=${2}
 
 	local ram_info=$(dmidecode -t 17 | grep Size)
 	local ram_size=$(echo "$ram_info" | awk '{sum += $2} END {print sum}')
 
 	local available_space=$(df -B 1G --output=avail "$mount_path" | tail -n 1)
-    local required_space=ram_size
+	local required_space=ram_size
 
 	SWAPFILE="$mount_path/swap/swapfile"
 	SWAPSIZE="${ram_size}GiB"
 
 	# check swap subvolume
 	if [ ! -d "$mount_path/swap" ]; then
-    	echo "$mount_path/swap does not exist. creating subvolume..."
+		echo "$mount_path/swap does not exist. creating subvolume..."
 
-    	# create subvolume
-    	btrfs subvolume create $mount_path/swap
+		# create subvolume
+		btrfs subvolume create $mount_path/swap
 		chattr +C $mount_path/swap
 	else
-    	# check if subvolume exists
-    	if btrfs subvolume show "$mount_path/swap" &> /dev/null; then
-    		echo "$mount_path/swap is a Btrfs subvolume."
-    	else
-    		echo "$mount_path/swap exists but is not a Btrfs subvolume."
-    		rm -rf $mount_path/swap
-    		btrfs subvolume create $mount_path/swap
-    		chattr +C $mount_path/swap
-    	fi
+		# check if subvolume exists
+		if btrfs subvolume show "$mount_path/swap" &>/dev/null; then
+			echo "$mount_path/swap is a Btrfs subvolume."
+		else
+			echo "$mount_path/swap exists but is not a Btrfs subvolume."
+			rm -rf $mount_path/swap
+			btrfs subvolume create $mount_path/swap
+			chattr +C $mount_path/swap
+		fi
 	fi
 
 	# create swapfile
 	echo "Creating swapfile..."
-    if [ ! -f "$SWAPFILE" ]; then
-        # btrfs filesystem mkswapfile --size "$ram_size"GiB "$mount_path/swap/swapfile"
-		
+	if [ ! -f "$SWAPFILE" ]; then
+		# btrfs filesystem mkswapfile --size "$ram_size"GiB "$mount_path/swap/swapfile"
+
 		mk_swapfile "$SWAPFILE" "$SWAPSIZE"
-    else
-        echo "Swapfile appears to already exist"
+	else
+		echo "Swapfile appears to already exist"
 		existing_file_type=$(file "$SWAPFILE" | cut -d' ' -f2-)
 		if [[ "$existing_file_type" == *"Linux swap file"* ]]; then
 			echo "Swapfile is a Linux swap file"
@@ -238,7 +247,7 @@ create_nix() {
 		btrfs subvolume create $nix_path
 	else
 		# check if subvolume exists
-		if btrfs subvolume show "$nix_path" &> /dev/null; then
+		if btrfs subvolume show "$nix_path" &>/dev/null; then
 			echo "$nix_path is a Btrfs subvolume."
 		else
 			echo "$nix_path exists but is not a Btrfs subvolume."
@@ -253,10 +262,10 @@ get_fbcon() {
 	if [[ -x $(command -v parse-edid) && -f "/etc/sk-chos/screen-rotate" ]]; then
 		source /etc/sk-chos/screen-rotate
 		if [[ -n "$FBCON_PARA" ]]; then
-        	echo "fbcon=$FBCON_PARA"
+			echo "fbcon=$FBCON_PARA"
 			return 0
 		fi
-    fi
+	fi
 
 	# Device specific configs
 	DEVICENAME=$(cat /sys/devices/virtual/dmi/id/product_name)
@@ -276,11 +285,10 @@ get_fbcon() {
 	# GPD
 	GPD_LIST="G1619-01:G1621-02:MicroPC:G1617-01"
 
-
 	LEFT_LIST="${OXP_LIST}:${AIR_LIST}:${AOK_LIST}:${AYN_LIST}:${LENOVO_LIST}"
 	RIGHT_LIST="${AYA_LIST}:${GPD_LIST}"
 
-	if [[  ":${LEFT_LIST}:" =~ ":${DEVICENAME}:" ]]; then
+	if [[ ":${LEFT_LIST}:" =~ ":${DEVICENAME}:" ]]; then
 		echo "video=efifb fbcon=rotate:3"
 	elif [[ ":${RIGHT_LIST}:" =~ ":${DEVICENAME}:" ]]; then
 		echo "video=efifb fbcon=rotate:1"
@@ -298,7 +306,7 @@ get_boot_cfg() {
 	local swap_arguments=${5}
 	local fbcon=${6}
 
-echo "title ${version}
+	echo "title ${version}
 linux /${version}/vmlinuz-linux
 ${amd_ucode}
 ${intel_ucode}
@@ -312,7 +320,7 @@ get_deployment_to_delete() {
 	local boot_cfg_path=${2}
 	local deployment_path=${3}
 
-	local TO_BOOT=`get_next_boot_deployment ${current_version} ${boot_cfg_path}`
+	local TO_BOOT=$(get_next_boot_deployment ${current_version} ${boot_cfg_path})
 
 	ls -1 ${deployment_path} | grep -v ${current_version} | grep -v ${TO_BOOT} || echo
 }
@@ -322,7 +330,7 @@ get_boot_to_delete() {
 	local boot_cfg_path=${2}
 	local boot_path=${3}
 
-	local TO_BOOT=`get_next_boot_deployment ${current_version} ${boot_cfg_path}`
+	local TO_BOOT=$(get_next_boot_deployment ${current_version} ${boot_cfg_path})
 
 	ls -1 ${boot_path} | grep 'chimeraos-*_*' | grep -v ${current_version} | grep -v ${TO_BOOT} || echo
 }
@@ -332,8 +340,8 @@ get_next_boot_deployment() {
 	local boot_cfg_path=${2}
 
 	local TO_BOOT='this-is-not-a-valid-version-string'
-	if [ -f "${boot_cfg_path}" ] && grep "^title" "${boot_cfg_path}" > /dev/null; then
-		TO_BOOT=`grep ^title ${boot_cfg_path} | sed 's/title //'`
+	if [ -f "${boot_cfg_path}" ] && grep "^title" "${boot_cfg_path}" >/dev/null; then
+		TO_BOOT=$(grep ^title ${boot_cfg_path} | sed 's/title //')
 	fi
 
 	echo ${TO_BOOT}
@@ -347,12 +355,12 @@ clean_progress() {
 
 	while IFS= read -r line || [[ -n "$line" ]]; do
 		# 检查输入行是否为有效数字
-        if ! [[ "$line" =~ ^[0-9]+$ ]]; then
-            continue
-        fi
-		value=$(( ${line}*${scale}/100 ))
+		if ! [[ "$line" =~ ^[0-9]+$ ]]; then
+			continue
+		fi
+		value=$((${line} * ${scale} / 100))
 		if [ "$last_value" != "$value" ]; then
-			value=$(( ${value} + ${offset_value} ))
+			value=$((${value} + ${offset_value}))
 			echo ${value}${postfix}
 			last_value=$value
 		fi
@@ -367,18 +375,18 @@ clean_progress_loop() {
 	local last_value=$max_progress
 
 	every_progress=$((max_progress / loop_count))
-    start_progress=$((SER * every_progress))
-    end_progress=$(((SER + 1) * every_progress))
-    scale=$((end_progress - start_progress))
+	start_progress=$((SER * every_progress))
+	end_progress=$(((SER + 1) * every_progress))
+	scale=$((end_progress - start_progress))
 
 	while IFS= read -r line || [[ -n "$line" ]]; do
 		# 检查输入行是否为有效数字
-        if ! [[ "$line" =~ ^[0-9]+$ ]]; then
-            continue
-        fi
-		value=$(( ${line}*${scale}/100 ))
+		if ! [[ "$line" =~ ^[0-9]+$ ]]; then
+			continue
+		fi
+		value=$((${line} * ${scale} / 100))
 		if [ "$last_value" != "$value" ]; then
-			value=$(( ${value} + ${start_progress} ))
+			value=$((${value} + ${start_progress}))
 			echo ${value}${postfix}
 			last_value=$value
 		fi
@@ -388,62 +396,62 @@ clean_progress_loop() {
 # Function to retrieve values from a .conf file
 # Usage: getValue filename section key
 get_conf_value() {
-    local filename="$1"
-    local section="$2"
-    local key="$3"
+	local filename="$1"
+	local section="$2"
+	local key="$3"
 
-    local section_found=false
-    local key_found=false
-    local values=()
+	local section_found=false
+	local key_found=false
+	local values=()
 
-    while IFS= read -r line || [[ -n $line ]]; do
-        # Remove leading and trailing whitespace
-        line=$(echo "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-        
-        # Check if the line is a comment or empty
-        if [[ $line == \#* ]] || [[ -z $line ]]; then
-            continue
-        fi
+	while IFS= read -r line || [[ -n $line ]]; do
+		# Remove leading and trailing whitespace
+		line=$(echo "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
 
-        # Check if the line matches the section header
-        if [[ $line == "[$section]" ]]; then
-            section_found=true
-        elif [[ $line == '['* ]]; then
-            # If a new section is encountered, break
-            if $section_found; then
-                break
-            fi
-        elif $section_found; then
-            # Check if the line contains the desired key
-            if [[ $line == *"$key"* ]]; then
-                local value=$(echo "$line" | sed -n "s/.*$key *= *\([^ ]*\).*/\1/p")
-                values+=("$value")
-                key_found=true
-            fi
-        fi
-    done < "$filename"
+		# Check if the line is a comment or empty
+		if [[ $line == \#* ]] || [[ -z $line ]]; then
+			continue
+		fi
 
-    if $key_found; then
-        if [ "${#values[@]}" -eq 1 ]; then
-            # If only one value is found, return it
-            echo "${values[0]}"
-        else
-            # If multiple values are found, return them as an array
-            echo "${values[@]}"
-        fi
-    fi
+		# Check if the line matches the section header
+		if [[ $line == "[$section]" ]]; then
+			section_found=true
+		elif [[ $line == '['* ]]; then
+			# If a new section is encountered, break
+			if $section_found; then
+				break
+			fi
+		elif $section_found; then
+			# Check if the line contains the desired key
+			if [[ $line == *"$key"* ]]; then
+				local value=$(echo "$line" | sed -n "s/.*$key *= *\([^ ]*\).*/\1/p")
+				values+=("$value")
+				key_found=true
+			fi
+		fi
+	done <"$filename"
+
+	if $key_found; then
+		if [ "${#values[@]}" -eq 1 ]; then
+			# If only one value is found, return it
+			echo "${values[0]}"
+		else
+			# If multiple values are found, return them as an array
+			echo "${values[@]}"
+		fi
+	fi
 }
 
 get_random_value() {
-    local array=("$@")
-    local array_length="${#array[@]}"
-    
-    if [ "$array_length" -eq 0 ]; then
-        echo ""
-    fi
+	local array=("$@")
+	local array_length="${#array[@]}"
 
-    local random_index=$((RANDOM % array_length))
-    echo "${array[$random_index]}"
+	if [ "$array_length" -eq 0 ]; then
+		echo ""
+	fi
+
+	local random_index=$((RANDOM % array_length))
+	echo "${array[$random_index]}"
 }
 
 get_fallback_url_justlist() {
@@ -455,20 +463,20 @@ get_fallback_url_justlist() {
 	fallback_file_url="${fallback_base}/file/Cloud189/img/"
 
 	local fallback_url=$(curl --http1.1 -L -s "${base_url}/fallback_url.txt")
-	# if fallback_url.txt contains "Not Found" 
+	# if fallback_url.txt contains "Not Found"
 	if echo "$fallback_url" | grep -q "Not Found"; then
 		fallback_url=""
 		# get the fallback url from the fallback api
 		file_info=$(curl --http1.1 -L -s -d "{}" -H "Content-Type:application/json" "${fallback_api_url}${img_file_name}")
 		if [[ ! -z "$file_info" ]]; then
-			fallback_file_id=$(echo "$file_info" | jq -r '.msg | first | .fileId' 2> /dev/null)
-			fallback_user=$(echo "$file_info" | jq -r '.msg | first | .user' 2> /dev/null)
+			fallback_file_id=$(echo "$file_info" | jq -r '.msg | first | .fileId' 2>/dev/null)
+			fallback_user=$(echo "$file_info" | jq -r '.msg | first | .user' 2>/dev/null)
 			if [[ ! -z "$fallback_file_id" && "$fallback_file_id" != "null" ]]; then
 				fallback_url="${fallback_file_url}${img_file_name}"
 				# fallback_url="${fallback_base}/file/${fallback_user}/?id=${fallback_file_id}"
 			fi
 		fi
-  	fi
+	fi
 	echo "$fallback_url"
 }
 
@@ -487,7 +495,12 @@ get_fallback_url_alist() {
 get_env_from_conf() {
 	set -a
 	for i in "${HOME}"/.config/environment.d/*.conf; do
-    	[[ -f "${i}" ]] && . "${i}"
+		[[ -f "${i}" ]] && . "${i}"
+	done
+	# 获取 uid 1000 的用户目录
+	home_dir=$(getent passwd 1000 | cut -d: -f6)
+	for i in "${home_dir}"/.config/environment.d/*.conf; do
+		[[ -f "${i}" ]] && . "${i}"
 	done
 	set +a
 }
@@ -503,24 +516,24 @@ main() {
 	FRZR_SOURCE=""
 	FRZR_PARAMS=""
 
-	while (( "$#" )); do
+	while (("$#")); do
 		case $1 in
-			--check)
-				FRZR_CHECK_UPDATE=1
-				shift
-				;;
-			--steam-progress)
-				FRZR_STEAM_PROGRESS=1
-				shift
-				;;
-			-*|--*)
-				echo "Unknown argument $1"
-				exit 1
-				;;
-			*) # preserve positional arguments
-				FRZR_PARAMS="${FRZR_PARAMS}$1 " # Use trailing space for the match below
-				shift
-				;;
+		--check)
+			FRZR_CHECK_UPDATE=1
+			shift
+			;;
+		--steam-progress)
+			FRZR_STEAM_PROGRESS=1
+			shift
+			;;
+		-* | --*)
+			echo "Unknown argument $1"
+			exit 1
+			;;
+		*)                               # preserve positional arguments
+			FRZR_PARAMS="${FRZR_PARAMS}$1 " # Use trailing space for the match below
+			shift
+			;;
 		esac
 	done
 
@@ -544,7 +557,7 @@ main() {
 		sleep 5
 	fi
 
-	if ! mountpoint -q ${MOUNT_PATH}/boot && ls -1 /dev/disk/by-label | grep frzr_efi > /dev/null; then
+	if ! mountpoint -q ${MOUNT_PATH}/boot && ls -1 /dev/disk/by-label | grep frzr_efi >/dev/null; then
 		mkdir -p ${MOUNT_PATH}/boot
 		mount -L frzr_efi ${MOUNT_PATH}/boot
 		sleep 5
@@ -560,11 +573,11 @@ main() {
 	# - we are currently running inside a frzr deployment (i.e. not during install)
 	# - the deployment is not currently running
 	# - the deployment is not configured to be run on next boot
-	if frzr-release > /dev/null; then
+	if frzr-release >/dev/null; then
 		CURRENT="$(frzr-release)"
-		TO_DELETE=`get_deployment_to_delete ${CURRENT} ${BOOT_CFG} ${DEPLOY_PATH}`
+		TO_DELETE=$(get_deployment_to_delete ${CURRENT} ${BOOT_CFG} ${DEPLOY_PATH})
 
-		TO_DELETE_BOOT=`get_boot_to_delete ${CURRENT} ${BOOT_CFG} ${MOUNT_PATH}/boot`
+		TO_DELETE_BOOT=$(get_boot_to_delete ${CURRENT} ${BOOT_CFG} ${MOUNT_PATH}/boot)
 
 		if [ -n "${TO_DELETE}" ]; then
 			for deployment in ${TO_DELETE}; do
@@ -584,18 +597,18 @@ main() {
 	fi
 
 	if [ ! -z "$FRZR_SOURCE" ] && [ "$FRZR_SOURCE" != " " ] && [ $FRZR_CHECK_UPDATE -eq 0 ] && [ $FRZR_STEAM_PROGRESS -eq 0 ]; then
-		echo "$FRZR_SOURCE" > "${MOUNT_PATH}/source"
+		echo "$FRZR_SOURCE" >"${MOUNT_PATH}/source"
 	fi
 
 	if [ -e "${MOUNT_PATH}/source" ]; then
-		SOURCE=`cat "${MOUNT_PATH}/source" | head -1`
+		SOURCE=$(cat "${MOUNT_PATH}/source" | head -1)
 	else
 		echo "WARNING: source wasn't specified"
 	fi
 
 	if [ "${local_install}" == true ]; then
-	    mkdir tmp_source
-	    mount -o rw -L FRZR_UPDATE /root/tmp_source
+		mkdir tmp_source
+		mount -o rw -L FRZR_UPDATE /root/tmp_source
 		FILE_NAME=$(basename /root/tmp_source/*.img.tar.xz*)
 		NAME=$(echo "${FILE_NAME}" | cut -f 1 -d '.')
 		SUBVOL="${DEPLOY_PATH}/${NAME}"
@@ -646,20 +659,19 @@ main() {
 		status=$?
 		set -e
 		case $status in
-			28)
-				echo "Failed to fetch releases: Connection timed out"
-				exit $status
-				;;
-			35)
-				echo "Failed to fetch releases: SSL connect error"
-				exit $status
-				;;
-			0)
-				;;
-			*)
-				echo "Failed to fetch releases, status code: $status"
-				exit $status
-				;;
+		28)
+			echo "Failed to fetch releases: Connection timed out"
+			exit $status
+			;;
+		35)
+			echo "Failed to fetch releases: SSL connect error"
+			exit $status
+			;;
+		0) ;;
+		*)
+			echo "Failed to fetch releases, status code: $status"
+			exit $status
+			;;
 		esac
 
 		if echo "$RELEASES" | grep -q "API rate limit"; then
@@ -679,7 +691,7 @@ main() {
 
 		if [ -z "$IMG_LIST_URL" ] || [[ "$IMG_LIST_URL" =~ "null" ]]; then
 			echo "No matching source found"
-			if curl --http1.1 -L -s --connect-timeout 5 -m 15 "${RELEASES_API_URL}" | grep "rate limit" > /dev/null; then
+			if curl --http1.1 -L -s --connect-timeout 5 -m 15 "${RELEASES_API_URL}" | grep "rate limit" >/dev/null; then
 				echo "GitHub API rate limit exceeded"
 				exit 29
 			fi
@@ -717,7 +729,7 @@ main() {
 					fi
 				fi
 			fi
-	
+
 			# if the fallback url is not empty, set the img_url to the fallback url
 			if [[ -n "$FALLBACK_URL" ]]; then
 				if [[ ! $FRZR_CHECK_UPDATE -eq 1 ]]; then
@@ -725,13 +737,12 @@ main() {
 				fi
 				SUB_IMG_URL="${FALLBACK_URL}"
 			fi
-	
-	
+
 			if [ -e ${SUBVOL} ]; then
 				echo "${NAME} already installed; aborting"
 				exit 7 # let Steam know there is no update available
 			fi
-	
+
 			if [ $FRZR_CHECK_UPDATE -eq 1 ]; then
 				# if [[ -n "$FALLBACK_URL" ]]; then
 				# 	fallback_msg="(with_fallback)"
@@ -747,59 +758,59 @@ main() {
 			fi
 
 			echo "Downloading ${NAME} ($((SER + 1))/${TOTAL})..."
-	
-			if [[ -x "$(command -v aria2c)" ]];then
+
+			if [[ -x "$(command -v aria2c)" ]]; then
 				if [ $FRZR_STEAM_PROGRESS -eq 1 ]; then
 					max_progress=91
 
 					aria2c --connect-timeout=10 --file-allocation=none -x 16 -s 16 \
-					--checksum=sha-256="${CHECKSUM}" --auto-file-renaming=false --allow-overwrite=true \
-					--console-log-level=warn --stderr=true -o "${FILE_NAME}" -d "${MOUNT_PATH}" "${SUB_IMG_URL}" 2>&1 | \
-					grep --line-buffered -oP '\d+(?=%)' | clean_progress_loop $max_progress $SER $TOTAL %
+						--checksum=sha-256="${CHECKSUM}" --auto-file-renaming=false --allow-overwrite=true \
+						--console-log-level=warn --stderr=true -o "${FILE_NAME}" -d "${MOUNT_PATH}" "${SUB_IMG_URL}" 2>&1 |
+						grep --line-buffered -oP '\d+(?=%)' | clean_progress_loop $max_progress $SER $TOTAL %
 				elif [ -z ${SHOW_UI} ]; then
 					echo "downloading ${FILE_NAME}..."
 					aria2c --connect-timeout=10 --file-allocation=none -x 16 -s 16 \
-					--checksum=sha-256="${CHECKSUM}" --auto-file-renaming=false --allow-overwrite=true \
-					--console-log-level=warn -o "${FILE_NAME}" -d "${MOUNT_PATH}" "${SUB_IMG_URL}"
+						--checksum=sha-256="${CHECKSUM}" --auto-file-renaming=false --allow-overwrite=true \
+						--console-log-level=warn -o "${FILE_NAME}" -d "${MOUNT_PATH}" "${SUB_IMG_URL}"
 				else
 					max_progress=100
 
 					aria2c --connect-timeout=10 --file-allocation=none -x 16 -s 16 \
-					--checksum=sha-256="${CHECKSUM}" --auto-file-renaming=false --allow-overwrite=true \
-					--console-log-level=warn --stderr=true -o "${FILE_NAME}" -d "${MOUNT_PATH}" "${SUB_IMG_URL}" 2>&1 | \
-					grep --line-buffered -oP '\d+(?=%)' | clean_progress_loop $max_progress $SER $TOTAL | \
-					whiptail --gauge "下载系统镜像 (${NAME}) " 10 50 0
+						--checksum=sha-256="${CHECKSUM}" --auto-file-renaming=false --allow-overwrite=true \
+						--console-log-level=warn --stderr=true -o "${FILE_NAME}" -d "${MOUNT_PATH}" "${SUB_IMG_URL}" 2>&1 |
+						grep --line-buffered -oP '\d+(?=%)' | clean_progress_loop $max_progress $SER $TOTAL |
+						whiptail --gauge "下载系统镜像 (${NAME}) " 10 50 0
 				fi
 			else
 				if [ $FRZR_STEAM_PROGRESS -eq 1 ]; then
 					max_progress=91
 
-					curl --connect-timeout 10 --http1.1 -# -L -o "${SUB_IMG_FILE}" -C - "${SUB_IMG_URL}" 2>&1 | \
-					stdbuf -oL tr '\r' '\n' | grep --line-buffered -oP '[0-9]*+(?=.[0-9])' | \
-					clean_progress_loop $max_progress $SER $TOTAL %
+					curl --connect-timeout 10 --http1.1 -# -L -o "${SUB_IMG_FILE}" -C - "${SUB_IMG_URL}" 2>&1 |
+						stdbuf -oL tr '\r' '\n' | grep --line-buffered -oP '[0-9]*+(?=.[0-9])' |
+						clean_progress_loop $max_progress $SER $TOTAL %
 				elif [ -z ${SHOW_UI} ]; then
 					echo "downloading ${FILE_NAME}..."
 					curl --connect-timeout 10 --http1.1 -L -o "${SUB_IMG_FILE}" -C - "${SUB_IMG_URL}"
 				else
 					max_progress=100
 
-					curl --connect-timeout 10 --http1.1 -# -L -o "${SUB_IMG_FILE}" -C - "${SUB_IMG_URL}" 2>&1 | \
-					stdbuf -oL tr '\r' '\n' | grep --line-buffered -oP '[0-9]*+(?=.[0-9])' | \
-					clean_progress_loop $max_progress $SER $TOTAL | \
-					whiptail --gauge "下载系统镜像 (${NAME})" 10 50 0
+					curl --connect-timeout 10 --http1.1 -# -L -o "${SUB_IMG_FILE}" -C - "${SUB_IMG_URL}" 2>&1 |
+						stdbuf -oL tr '\r' '\n' | grep --line-buffered -oP '[0-9]*+(?=.[0-9])' |
+						clean_progress_loop $max_progress $SER $TOTAL |
+						whiptail --gauge "下载系统镜像 (${NAME})" 10 50 0
 				fi
 			fi
 
-			CHECKSUM_CALCULATED=`sha256sum "${SUB_IMG_FILE}" | cut -d' ' -f 1`
+			CHECKSUM_CALCULATED=$(sha256sum "${SUB_IMG_FILE}" | cut -d' ' -f 1)
 			if [ "$CHECKSUM" != "$CHECKSUM_CALCULATED" ]; then
 				rm -f "${SUB_IMG_FILE}"
 				echo "checksum does not match; aborting"
 				exit 1
 			fi
 
-			SER=$((SER+1))
+			SER=$((SER + 1))
 		done
-    fi
+	fi
 
 	if [ -z ${SHOW_UI} ]; then
 		echo "installing ${NAME}..."
@@ -810,7 +821,7 @@ main() {
 	# 对分割的文件进行合并
 	if [ -f "${IMG_FILE}-000" ]; then
 		echo "merging split files..."
-		cat ${IMG_FILE}-* > ${IMG_FILE}
+		cat ${IMG_FILE}-* >${IMG_FILE}
 		rm -f ${IMG_FILE}-*
 		echo "split files merge complete"
 	fi
@@ -821,7 +832,7 @@ main() {
 	# 	tar xfO ${IMG_FILE} | btrfs receive --quiet ${DEPLOY_PATH}
 	# fi
 	if [[ "${IMG_FILE##*.}" == "img" ]]; then
-		btrfs receive --quiet ${DEPLOY_PATH} < ${IMG_FILE}
+		btrfs receive --quiet ${DEPLOY_PATH} <${IMG_FILE}
 	elif [[ "${IMG_FILE##*.}" == "zst" ]]; then
 		zstd -d -c ${IMG_FILE} | btrfs receive --quiet ${DEPLOY_PATH}
 	elif [[ "${IMG_FILE##*.}" == "xz" ]]; then
@@ -853,25 +864,25 @@ main() {
 		INTEL_UCODE="# intel-ucode in initramfs"
 	else
 		echo "microcode hook not found: will use systemd-bood initrd."
-		if [ -e ${SUBVOL}/boot/amd-ucode.img ] ; then
+		if [ -e ${SUBVOL}/boot/amd-ucode.img ]; then
 			cp ${SUBVOL}/boot/amd-ucode.img ${MOUNT_PATH}/boot/${NAME}
 			AMD_UCODE="initrd /${NAME}/amd-ucode.img"
 		fi
 
-		if [ -e ${SUBVOL}/boot/intel-ucode.img ] ; then
+		if [ -e ${SUBVOL}/boot/intel-ucode.img ]; then
 			cp ${SUBVOL}/boot/intel-ucode.img ${MOUNT_PATH}/boot/${NAME}
 			INTEL_UCODE="initrd /${NAME}/intel-ucode.img"
 		fi
 	fi
 
 	ADDITIONAL_ARGUMENTS=""
-	if [ -e ${SUBVOL}/usr/lib/frzr.d/bootconfig.conf ] ; then
+	if [ -e ${SUBVOL}/usr/lib/frzr.d/bootconfig.conf ]; then
 		ADDITIONAL_ARGUMENTS="$ADDITIONAL_ARGUMENTS $(cat ${SUBVOL}/usr/lib/frzr.d/bootconfig.conf)"
 	fi
 
 	# create_swap "${MOUNT_PATH}" "${SUBVOL}"
 	SWAP_ARGUMENTS=""
-	if [ -f ${MOUNT_PATH}/swap/swapfile ] ; then
+	if [ -f ${MOUNT_PATH}/swap/swapfile ]; then
 		resume="resume=PARTUUID=$(lsblk -no PARTUUID $(mount | grep " ${MOUNT_PATH} " | cut -d' ' -f1))"
 		resume_offset="resume_offset=$(btrfs inspect-internal map-swapfile -r ${MOUNT_PATH}/swap/swapfile)"
 		SWAP_ARGUMENTS="${resume} ${resume_offset}"
@@ -883,17 +894,16 @@ main() {
 
 	# get_boot_cfg "${NAME}" "${AMD_UCODE}" "${INTEL_UCODE}" "${ADDITIONAL_ARGUMENTS}" "${SWAP_ARGUMENTS} ${FBCON}" > ${BOOT_CFG}
 	BOOT_CFG_PARA=$(get_boot_cfg "${NAME}" "${AMD_UCODE}" "${INTEL_UCODE}" "${ADDITIONAL_ARGUMENTS}" "${SWAP_ARGUMENTS}" "${FBCON}")
-	echo "${BOOT_CFG_PARA}" > ${BOOT_CFG}
+	echo "${BOOT_CFG_PARA}" >${BOOT_CFG}
 	export BOOT_CFG_PARA="${BOOT_CFG_PARA}"
-	echo "default frzr.conf" > ${MOUNT_PATH}/boot/loader/loader.conf
+	echo "default frzr.conf" >${MOUNT_PATH}/boot/loader/loader.conf
 
 	# Check if there are migrations available
-	if compgen -G "${SUBVOL}"/usr/lib/frzr.d/*.migration > /dev/null ; then
-		for m in "${SUBVOL}"/usr/lib/frzr.d/*.migration ;
-		do
+	if compgen -G "${SUBVOL}"/usr/lib/frzr.d/*.migration >/dev/null; then
+		for m in "${SUBVOL}"/usr/lib/frzr.d/*.migration; do
 			unset -f post_install
 			. $m
-			if [ "$(type -t post_install)" == function ] ; then
+			if [ "$(type -t post_install)" == function ]; then
 				post_install "${MOUNT_PATH}" "${SUBVOL}" "${NAME}"
 			fi
 			unset -f post_install
@@ -907,7 +917,7 @@ main() {
 
 	# Check if the FIRMWARE_OVERRIDE variable is set by the install media, if so enable firmware overrides
 	if [ -n "${FIRMWARE_OVERRIDE}" ]; then
-		echo "export USE_FIRMWARE_OVERRIDES=1" > ${MOUNT_PATH}/etc/device-quirks.conf
+		echo "export USE_FIRMWARE_OVERRIDES=1" >${MOUNT_PATH}/etc/device-quirks.conf
 	fi
 
 	# Run frzr-tweaks to execute the device-quirks to be supplied by the deployed images
@@ -923,7 +933,6 @@ main() {
 	echo "deployment complete; restart to boot into ${NAME}"
 }
 
-
-if [ "$0" = "$BASH_SOURCE" ] ; then
+if [ "$0" = "$BASH_SOURCE" ]; then
 	main "$@"
 fi
