@@ -651,11 +651,12 @@ main() {
 			# 脱敏处理 只显示前 8 位，后面用 * 代替
 			token_with_mask=$(echo "${GITHUB_TOKEN}" | sed 's/./\*/9g')
 			echo "Using GitHub token: ${token_with_mask}" >&2
-			HEADER="-H 'Authorization: token ${GITHUB_TOKEN}'"
+			HEADER="Authorization: Bearer ${GITHUB_TOKEN}"
+			HEAD_FLAG="-H"
 		fi
 
 		set +e
-		RELEASES=$(curl --http1.1 -L -s --connect-timeout 15 -m 15 $HEADER "${RELEASES_API_URL}")
+		RELEASES=$(curl --http1.1 -L -s --connect-timeout 15 -m 15 $HEAD_FLAG "${HEADER}" "${RELEASES_API_URL}")
 		status=$?
 		set -e
 		case $status in
