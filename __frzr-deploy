@@ -655,7 +655,7 @@ main() {
 		fi
 
 		set +e
-		RELEASES=$(curl --http1.1 -L -s --connect-timeout 10 -m 15 $HEADER "${RELEASES_API_URL}")
+		RELEASES=$(curl --http1.1 -L -s --connect-timeout 15 -m 15 $HEADER "${RELEASES_API_URL}")
 		status=$?
 		set -e
 		case $status in
@@ -691,7 +691,7 @@ main() {
 
 		if [ -z "$IMG_LIST_URL" ] || [[ "$IMG_LIST_URL" =~ "null" ]]; then
 			echo "No matching source found"
-			if curl --http1.1 -L -s --connect-timeout 5 -m 15 "${RELEASES_API_URL}" | grep "rate limit" >/dev/null; then
+			if curl --http1.1 -L -s --connect-timeout 15 -m 15 "${RELEASES_API_URL}" | grep "rate limit" >/dev/null; then
 				echo "GitHub API rate limit exceeded"
 				exit 29
 			fi
@@ -699,7 +699,7 @@ main() {
 		fi
 
 		BASE_URL=$(dirname $(echo "${IMG_LIST_URL}" | cut -d' ' -f1))
-		IMG_LIST_STR="$(curl --http1.1 -L -s --connect-timeout 5 -m 15 ${BASE_URL}/sha256sum.txt)"
+		IMG_LIST_STR="$(curl --http1.1 -L -s --connect-timeout 15 -m 15 ${BASE_URL}/sha256sum.txt)"
 
 		echo "$IMG_LIST_STR"
 		CHECKSUM_LIST=$(echo "$IMG_LIST_STR" | awk '{print $1}')
@@ -763,19 +763,19 @@ main() {
 				if [ $FRZR_STEAM_PROGRESS -eq 1 ]; then
 					max_progress=91
 
-					aria2c --connect-timeout=10 --file-allocation=none -x 16 -s 16 \
+					aria2c --connect-timeout=15 --file-allocation=none -x 16 -s 16 \
 						--checksum=sha-256="${CHECKSUM}" --auto-file-renaming=false --allow-overwrite=true \
 						--console-log-level=warn --stderr=true -o "${FILE_NAME}" -d "${MOUNT_PATH}" "${SUB_IMG_URL}" 2>&1 |
 						grep --line-buffered -oP '\d+(?=%)' | clean_progress_loop $max_progress $SER $TOTAL %
 				elif [ -z ${SHOW_UI} ]; then
 					echo "downloading ${FILE_NAME}..."
-					aria2c --connect-timeout=10 --file-allocation=none -x 16 -s 16 \
+					aria2c --connect-timeout=15 --file-allocation=none -x 16 -s 16 \
 						--checksum=sha-256="${CHECKSUM}" --auto-file-renaming=false --allow-overwrite=true \
 						--console-log-level=warn -o "${FILE_NAME}" -d "${MOUNT_PATH}" "${SUB_IMG_URL}"
 				else
 					max_progress=100
 
-					aria2c --connect-timeout=10 --file-allocation=none -x 16 -s 16 \
+					aria2c --connect-timeout=15 --file-allocation=none -x 16 -s 16 \
 						--checksum=sha-256="${CHECKSUM}" --auto-file-renaming=false --allow-overwrite=true \
 						--console-log-level=warn --stderr=true -o "${FILE_NAME}" -d "${MOUNT_PATH}" "${SUB_IMG_URL}" 2>&1 |
 						grep --line-buffered -oP '\d+(?=%)' | clean_progress_loop $max_progress $SER $TOTAL |
@@ -785,16 +785,16 @@ main() {
 				if [ $FRZR_STEAM_PROGRESS -eq 1 ]; then
 					max_progress=91
 
-					curl --connect-timeout 10 --http1.1 -# -L -o "${SUB_IMG_FILE}" -C - "${SUB_IMG_URL}" 2>&1 |
+					curl --connect-timeout 15 --http1.1 -# -L -o "${SUB_IMG_FILE}" -C - "${SUB_IMG_URL}" 2>&1 |
 						stdbuf -oL tr '\r' '\n' | grep --line-buffered -oP '[0-9]*+(?=.[0-9])' |
 						clean_progress_loop $max_progress $SER $TOTAL %
 				elif [ -z ${SHOW_UI} ]; then
 					echo "downloading ${FILE_NAME}..."
-					curl --connect-timeout 10 --http1.1 -L -o "${SUB_IMG_FILE}" -C - "${SUB_IMG_URL}"
+					curl --connect-timeout 15 --http1.1 -L -o "${SUB_IMG_FILE}" -C - "${SUB_IMG_URL}"
 				else
 					max_progress=100
 
-					curl --connect-timeout 10 --http1.1 -# -L -o "${SUB_IMG_FILE}" -C - "${SUB_IMG_URL}" 2>&1 |
+					curl --connect-timeout 15 --http1.1 -# -L -o "${SUB_IMG_FILE}" -C - "${SUB_IMG_URL}" 2>&1 |
 						stdbuf -oL tr '\r' '\n' | grep --line-buffered -oP '[0-9]*+(?=.[0-9])' |
 						clean_progress_loop $max_progress $SER $TOTAL |
 						whiptail --gauge "下载系统镜像 (${NAME})" 10 50 0
