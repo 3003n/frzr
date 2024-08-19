@@ -656,7 +656,11 @@ main() {
 		fi
 
 		set +e
-		RELEASES=$(curl --http1.1 -L -s --connect-timeout 15 -m 15 $HEAD_FLAG "${HEADER}" "${RELEASES_API_URL}")
+		if [[ -n "$HEADER" ]]; then
+			RELEASES=$(curl --http1.1 -L -s --connect-timeout 15 -m 15 $HEAD_FLAG "${HEADER}" "${RELEASES_API_URL}")
+		else
+			RELEASES=$(curl --http1.1 -L -s --connect-timeout 15 -m 15 "${RELEASES_API_URL}")
+		fi
 		status=$?
 		set -e
 		case $status in
