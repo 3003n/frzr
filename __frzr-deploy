@@ -497,11 +497,16 @@ get_env_from_conf() {
 	for i in "${HOME}"/.config/environment.d/*.conf; do
 		[[ -f "${i}" ]] && . "${i}"
 	done
+
 	# 获取 uid 1000 的用户目录
-	home_dir=$(getent passwd 1000 | cut -d: -f6)
-	for i in "${home_dir}"/.config/environment.d/*.conf; do
-		[[ -f "${i}" ]] && . "${i}"
-	done
+	home_dir=$(getent passwd 1000 2>/dev/null | cut -d: -f6)
+	echo "Home directory: ${home_dir}"
+	sleep 3
+	if [[ -d "${home_dir}/.config/environment.d" ]]; then
+		for i in "${home_dir}"/.config/environment.d/*.conf; do
+			[[ -f "${i}" ]] && . "${i}"
+		done
+	fi
 	set +a
 }
 
@@ -644,7 +649,7 @@ main() {
 		fi
 
 		# get environment variables from $HOME/.config/environment.d/*.conf
-		get_env_from_conf
+		get_env_from_conf || true
 
 		if [[ -n "$GITHUB_TOKEN" ]]; then
 			# RELEASES_API_URL="${RELEASES_API_URL}?access_token=${GITHUB_TOKEN}"
