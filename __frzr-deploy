@@ -569,6 +569,8 @@ main() {
 				rm -rf ${MOUNT_PATH}/boot/${boot_entry} || true
 			done
 		fi
+
+		rm -f ${MOUNT_PATH}/boot/*.img.tmp || true
 	fi
 
 	if [ ! -z "$FRZR_SOURCE" ] && [ "$FRZR_SOURCE" != " " ] && [ $FRZR_CHECK_UPDATE -eq 0 ] && [ $FRZR_STEAM_PROGRESS -eq 0 ]; then
