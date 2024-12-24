@@ -164,6 +164,67 @@ get_img_url() {
 	echo $result
 }
 
+handle_multipart_image() {
+    local base_file="$1"
+    local base_name=$(basename "$base_file")
+    local dir_name=$(dirname "$base_file")
+    
+    # 首先检查新格式（.partN-T）
+    local first_part=$(find "$dir_name" -maxdepth 1 -type f -name "${base_name}.part1-*.img.*" | head -n1)
+    if [ -n "$first_part" ]; then
+        # 从文件名中提取总部分数
+        local total_parts=$(echo "$first_part" | grep -o 'part1-[0-9]*' | cut -d'-' -f2)
+        echo "Found multipart image with $total_parts parts (new format)"
+        
+        # 检查所有部分是否存在
+        local missing_parts=0
+        for ((i=1; i<=$total_parts; i++)); do
+            if [ ! -f "${dir_name}/${base_name}.part${i}-${total_parts}.img."* ]; then
+                echo "Missing part $i of $total_parts"
+                missing_parts=1
+                break
+            fi
+        done
+        
+        if [ $missing_parts -eq 1 ]; then
+            echo "Error: Some parts are missing"
+            return 1
+        fi
+        
+        # 合并文件
+        echo "Merging parts..."
+        : > "$base_file"  # 清空或创建目标文件
+        for ((i=1; i<=$total_parts; i++)); do
+            cat "${dir_name}/${base_name}.part${i}-${total_parts}.img."* >> "$base_file"
+        done
+        
+        # 清理分包文件
+        echo "Cleaning up part files..."
+        for ((i=1; i<=$total_parts; i++)); do
+            rm -f "${dir_name}/${base_name}.part${i}-${total_parts}.img."*
+        done
+        
+        echo "$base_file"
+        return 0
+    fi
+    
+    # 检查旧格式（-000）
+    if [ -f "${base_file}-000" ]; then
+        echo "Found split files (old format)"
+        echo "Merging split files..."
+        : > "$base_file"  # 清空或创建目标文件
+        cat ${base_file}-* > "$base_file"
+        rm -f ${base_file}-*
+        echo "Split files merge complete"
+        echo "$base_file"
+        return 0
+    fi
+    
+    # 不是分包文件，返回原文件名
+    echo "$base_file"
+    return 0
+}
+
 mk_swapfile() {
 	SWAPFILE=${1:-}
 	SWAPSIZE=${2:-}
@@ -808,19 +869,13 @@ main() {
 		whiptail --infobox "提取并安装系统镜像 (${NAME}), 这可能需要一些时间。" 10 50
 	fi
 
-	# 对分割的文件进行合并
-	if [ -f "${IMG_FILE}-000" ]; then
-		echo "merging split files..."
-		cat ${IMG_FILE}-* >${IMG_FILE}
-		rm -f ${IMG_FILE}-*
-		echo "split files merge complete"
+	# 处理分包镜像文件
+	IMG_FILE=$(handle_multipart_image "${IMG_FILE}")
+	if [ $? -ne 0 ]; then
+		echo "Error handling multipart image"
+		exit 1
 	fi
 
-	# if [[ "${IMG_FILE##*.}" == "img" ]]; then
-	# 	btrfs receive --quiet ${DEPLOY_PATH} < ${IMG_FILE}
-	# else
-	# 	tar xfO ${IMG_FILE} | btrfs receive --quiet ${DEPLOY_PATH}
-	# fi
 	if [[ "${IMG_FILE##*.}" == "img" ]]; then
 		btrfs receive --quiet ${DEPLOY_PATH} <${IMG_FILE}
 	elif [[ "${IMG_FILE##*.}" == "zst" ]]; then
