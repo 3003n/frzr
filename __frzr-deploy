@@ -167,10 +167,11 @@ get_img_url() {
 handle_multipart_image() {
     local base_file="$1"
     local base_name=$(basename "$base_file")
+	local base_name_no_ext="${base_name%%.*}"
     local dir_name=$(dirname "$base_file")
     
     # 首先检查新格式（.partN-T）
-    local first_part=$(find "$dir_name" -maxdepth 1 -type f -name "${base_name}.part1-*.img.*" | head -n1)
+    local first_part=$(find "$dir_name" -maxdepth 1 -type f -name "${base_name_no_ext}.part1-*.img.*" | head -n1)
     if [ -n "$first_part" ]; then
         # 从文件名中提取总部分数
         local total_parts=$(echo "$first_part" | grep -o 'part1-[0-9]*' | cut -d'-' -f2)
@@ -179,7 +180,7 @@ handle_multipart_image() {
         # 检查所有部分是否存在
         local missing_parts=0
         for ((i=1; i<=$total_parts; i++)); do
-            if [ ! -f "${dir_name}/${base_name}.part${i}-${total_parts}.img."* ]; then
+            if [ ! -f "${dir_name}/${base_name_no_ext}.part${i}-${total_parts}.img."* ]; then
                 echo "Missing part $i of $total_parts" >&2
                 missing_parts=1
                 break
@@ -195,13 +196,13 @@ handle_multipart_image() {
         echo "Merging parts..." >&2
         : > "$base_file"  # 清空或创建目标文件
         for ((i=1; i<=$total_parts; i++)); do
-            cat "${dir_name}/${base_name}.part${i}-${total_parts}.img."* >> "$base_file"
+            cat "${dir_name}/${base_name_no_ext}.part${i}-${total_parts}.img."* >> "$base_file"
         done
         
         # 清理分包文件
         echo "Cleaning up part files..." >&2
         for ((i=1; i<=$total_parts; i++)); do
-            rm -f "${dir_name}/${base_name}.part${i}-${total_parts}.img."*
+            rm -f "${dir_name}/${base_name_no_ext}.part${i}-${total_parts}.img."*
         done
         
         echo "$base_file"
