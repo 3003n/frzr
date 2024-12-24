@@ -457,7 +457,7 @@ get_fallback_url_alist() {
 	image_url="${fallback_base}${img_file_name}"
 
 	# 使用 curl 获取链接的状态码是否是 302，如果是 302，说明链接有效，echo 出来
-	if curl --http1.1 -s -o /dev/null -w "%{http_code}" "$image_url" | grep -q "302"; then
+	if curl --http1.1 -L -s -o /dev/null -w "%{http_code}" "$image_url" | grep -q "302"; then
 		echo "$image_url"
 	fi
 }
@@ -584,12 +584,20 @@ main() {
 	fi
 
 	if [ "${local_install}" == true ]; then
+		# install from local disk where label is "FRZR_UPDATE"
 		mkdir tmp_source
 		mount -o rw -L FRZR_UPDATE /root/tmp_source
-		FILE_NAME=$(basename /root/tmp_source/*.img.tar.xz*)
-		NAME=$(echo "${FILE_NAME}" | cut -f 1 -d '.')
-		SUBVOL="${DEPLOY_PATH}/${NAME}"
-		IMG_FILE="/root/tmp_source/${FILE_NAME}"
+
+		# find the matching file
+		if IMG_FILE=$(find /root/tmp_source -maxdepth 1 -type f -regex ".*\.img\(\.tar\.xz\|\.xz\|\.zst\)?$" | head -n1); then
+			FILE_NAME=$(basename "${IMG_FILE}")
+			NAME=$(echo "${FILE_NAME}" | cut -f 1 -d '.')
+			SUBVOL="${DEPLOY_PATH}/${NAME}"
+		else
+			echo "No valid image file found in FRZR_UPDATE partition"
+			exit 1
+		fi
+
 	elif [[ "$FRZR_SOURCE" =~ \.img(\.tar\.xz|\.xz|\.zst)?$ ]]; then
 		FILE_NAME=$(basename ${FRZR_SOURCE})
 		NAME=$(echo "${FILE_NAME}" | cut -f 1 -d '.')
