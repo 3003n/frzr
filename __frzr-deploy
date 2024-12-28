@@ -523,8 +523,9 @@ get_fallback_url_alist() {
 	fallback_base="https://ns.switchsystem.eu.org/d/guest/stos/img/"
 	image_url="${fallback_base}${img_file_name}"
 
-	# 使用 curl 获取链接的状态码是否是 302，如果是 302，说明链接有效，echo 出来
-	if curl --http1.1 -L -s -o /dev/null -w "%{http_code}" "$image_url" | grep -q "302"; then
+	# 检查初始响应是否是重定向状态码（301、302、307、308）
+	initial_code=$(curl --http1.1 -s -o /dev/null -w "%{http_code}" -I "$image_url")
+	if [[ "$initial_code" =~ ^30[1278]$ ]]; then
 		echo "$image_url"
 	fi
 }
